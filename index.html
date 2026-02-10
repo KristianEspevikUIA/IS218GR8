@@ -20,6 +20,27 @@
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+  <!-- Supabase Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@latest"></script>
+
+  <!-- Supabase Configuration (Optional) -->
+  <script>
+    // Configure Supabase here if you have a PostGIS database
+    // This is optional - the app will work without it
+    window.SUPABASE_CONFIG = {
+      projectUrl: 'https://your-project.supabase.co',
+      anonKey: 'your-anon-key'
+    };
+
+    // Initialize Supabase client if configured
+    if (window.SUPABASE_CONFIG.projectUrl !== 'https://your-project.supabase.co') {
+      window.SUPABASE_CLIENT = supabase.createClient(
+        window.SUPABASE_CONFIG.projectUrl,
+        window.SUPABASE_CONFIG.anonKey
+      );
+    }
+  </script>
+
   <!-- GeoJSON Data (Embedded) -->
   <script>
     window.GEOJSON_DATA = {

@@ -91,6 +91,55 @@ class DataModel {
     }
   }
 
+  /**
+   * Query Supabase with PostGIS spatial SQL functions
+   * @param {object} supabaseClient - Initialized Supabase client
+   * @param {string} tableName - Table to query
+   * @returns {Promise<array>} Query results with geometry data
+   */
+  async querySupabaseWithSpatial(supabaseClient, tableName) {
+    try {
+      // Query with PostGIS geometry column (assume geometry column exists)
+      const { data, error } = await supabaseClient
+        .from(tableName)
+        .select('id, name, category, description, geometry');
+      
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error(`Error querying PostGIS table ${tableName}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Spatial query: Find features within distance using PostGIS ST_DWithin
+   * @param {object} supabaseClient - Initialized Supabase client
+   * @param {string} tableName - Table to query
+   * @param {number} lng - Longitude of search point
+   * @param {number} lat - Latitude of search point
+   * @param {number} distanceMeters - Search radius in meters
+   * @returns {Promise<array>} Features within radius
+   */
+  async querySupabaseWithinDistance(supabaseClient, tableName, lng, lat, distanceMeters) {
+    try {
+      // Use PostGIS ST_DWithin for distance-based spatial query
+      // This requires a PostGIS geometry column with spatial index
+      const { data, error } = await supabaseClient.rpc('find_nearby_locations', {
+        p_longitude: lng,
+        p_latitude: lat,
+        p_distance: distanceMeters
+      });
+      
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.warn(`PostGIS distance query not available (RPC function not created):`, error);
+      // Fallback: return all data if RPC not available
+      return await this.querySupabaseWithSpatial(supabaseClient, tableName);
+    }
+  }
+
   filterByDistance(geojson, point, radiusKm) {
     const [lat1, lng1] = point;
     const R = 6371;
@@ -158,15 +207,22 @@ class MapView {
         const popup = this.createPopup(feature.properties);
         layer.bindPopup(popup);
         
-        layer.on('mouseover', function() {
-          this.setStyle({
-            weight: (options.weight || 2) + 2,
-            opacity: 1
+        // Only add style handlers for non-Point features (they don't have setStyle)
+        if (feature.geometry.type !== 'Point') {
+          layer.on('mouseover', function() {
+            if (this.setStyle) {
+              this.setStyle({
+                weight: (options.weight || 2) + 2,
+                opacity: 1
+              });
+            }
           });
-        });
-        layer.on('mouseout', function() {
-          this.setStyle(defaultStyle);
-        });
+          layer.on('mouseout', function() {
+            if (this.setStyle) {
+              this.setStyle(defaultStyle);
+            }
+          });
+        }
       }
     });
 
@@ -471,16 +527,40 @@ class AppController {
       url: './data/geojson/sample.geojson'
     });
 
+    // OGC API source - using Kartverket Adresser API (official Norwegian geocoding service)
+    this.dataModel.registerSource('ogc-api-external', {
+      type: 'ogc-api',
+      url: 'https://ws.geonorge.no/adresser/v1/sok',
+      params: {
+        sok: 'kirke',  // Search for "kirke" (church) in Norwegian
+        treffPerSide: 50,
+        asciiKompatibel: true
+      }
+    });
+
+    // Supabase configuration (optional - user must configure)
+    this.dataModel.registerSource('supabase', {
+      type: 'supabase',
+      projectUrl: window.SUPABASE_CONFIG?.projectUrl || 'https://your-project.supabase.co',
+      anonKey: window.SUPABASE_CONFIG?.anonKey || 'your-anon-key'
+    });
+
     this.mapModel.addLayer('geojson-local', {
       name: 'Local GeoJSON Data',
       visible: true,
       color: '#3388ff'
     });
 
-    this.mapModel.addLayer('geonorge-api', {
-      name: 'GeoNorge API Data',
+    this.mapModel.addLayer('ogc-api-external', {
+      name: 'OGC API Data (Nominatim)',
       visible: false,
       color: '#ff8c00'
+    });
+
+    this.mapModel.addLayer('supabase-locations', {
+      name: 'Supabase PostGIS',
+      visible: false,
+      color: '#10b981'
     });
   }
 
@@ -490,12 +570,102 @@ class AppController {
 
   async loadLayers() {
     try {
-      // Use embedded GeoJSON data
+      // Load embedded GeoJSON data
       const geojsonData = window.GEOJSON_DATA;
       this.mapModel.setLayerData('geojson-local', geojsonData);
       this.mapView.addGeoJSONLayer('geojson-local', geojsonData, {
         color: '#3388ff'
       });
+
+      // Load OGC API data (Kartverket Adresser API)
+      try {
+        const ogcConfig = this.dataModel.dataSources.get('ogc-api-external');
+        const ogcResponse = await this.dataModel.fetchOGCAPI(ogcConfig.url, ogcConfig.params);
+        
+        // Convert Kartverket response to GeoJSON
+        if (ogcResponse && ogcResponse.adresser && ogcResponse.adresser.length > 0) {
+          const ogcData = {
+            type: 'FeatureCollection',
+            features: ogcResponse.adresser.map(addr => ({
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: [addr.representasjonspunkt.lon, addr.representasjonspunkt.lat]
+              },
+              properties: {
+                navn: addr.adressetekst,
+                postnummer: addr.postnummer,
+                poststed: addr.poststed,
+                kommune: addr.kommune,
+                fylke: addr.fylke
+              }
+            }))
+          };
+          
+          this.mapModel.setLayerData('ogc-api-external', ogcData);
+          this.mapView.addGeoJSONLayer('ogc-api-external', ogcData, {
+            color: '#ff8c00'
+          });
+          this.uiView.toast(`Loaded ${ogcData.features.length} addresses from Kartverket Adresser API`, 'success');
+        }
+      } catch (error) {
+        console.warn('OGC API data failed to load:', error);
+        this.uiView.toast('Kartverket API data unavailable', 'warning');
+      }
+
+      // Load Supabase PostGIS data with spatial queries (if configured)
+      if (window.SUPABASE_CLIENT) {
+        try {
+          // Query all locations from Supabase (PostGIS enabled table)
+          const supabaseData = await this.dataModel.querySupabaseWithSpatial(
+            window.SUPABASE_CLIENT,
+            'locations'
+          );
+          
+          if (supabaseData && supabaseData.length > 0) {
+            // Convert Supabase results to GeoJSON
+            const geojsonFromSupabase = {
+              type: 'FeatureCollection',
+              features: supabaseData.map(item => {
+                // Extract coordinates from geometry
+                let coords = [0, 0];
+                if (item.geometry) {
+                  if (typeof item.geometry === 'string') {
+                    // Parse GeoJSON string if needed
+                    const geom = JSON.parse(item.geometry);
+                    coords = geom.coordinates;
+                  } else if (item.geometry.coordinates) {
+                    coords = item.geometry.coordinates;
+                  }
+                }
+                
+                return {
+                  type: 'Feature',
+                  geometry: {
+                    type: 'Point',
+                    coordinates: coords
+                  },
+                  properties: {
+                    id: item.id,
+                    name: item.name,
+                    category: item.category,
+                    description: item.description
+                  }
+                };
+              })
+            };
+            
+            this.mapModel.setLayerData('supabase-locations', geojsonFromSupabase);
+            this.mapView.addGeoJSONLayer('supabase-locations', geojsonFromSupabase, {
+              color: '#10b981'
+            });
+            this.uiView.toast(`Loaded ${geojsonFromSupabase.features.length} locations from PostGIS database`, 'success');
+          }
+        } catch (error) {
+          console.warn('Supabase PostGIS data failed to load:', error);
+          // This is optional, so don't show error toast
+        }
+      }
     } catch (error) {
       console.error('Error loading layers:', error);
       throw error;
