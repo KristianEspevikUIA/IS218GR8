@@ -54,43 +54,19 @@ class MapModel {
 class DataModel {
   constructor() {
     this.dataSources = new Map();
-    this.cache = new Map();
   }
 
   registerSource(name, config) {
     this.dataSources.set(name, config);
   }
 
-  async fetchGeoJSON(url) {
-    if (this.cache.has(url)) {
-      return this.cache.get(url);
-    }
-
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      this.cache.set(url, data);
-      return data;
-    } catch (error) {
-      console.error(`Error fetching GeoJSON from ${url}:`, error);
-      throw error;
-    }
-  }
-
   async fetchOGCAPI(url, params = {}) {
-    const cacheKey = url + JSON.stringify(params);
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey);
-    }
-
     try {
       const queryString = new URLSearchParams(params).toString();
       const fullUrl = queryString ? `${url}?${queryString}` : url;
       const response = await fetch(fullUrl);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      this.cache.set(cacheKey, data);
       return data;
     } catch (error) {
       console.error(`Error fetching OGC API from ${url}:`, error);
@@ -115,18 +91,6 @@ class DataModel {
     }
   }
 
-  filterByBounds(geojson, bounds) {
-    const [[minLat, minLng], [maxLat, maxLng]] = bounds;
-    const filtered = {
-      type: 'FeatureCollection',
-      features: geojson.features.filter(feature => {
-        const [lng, lat] = feature.geometry.coordinates;
-        return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
-      })
-    };
-    return filtered;
-  }
-
   filterByDistance(geojson, point, radiusKm) {
     const [lat1, lng1] = point;
     const R = 6371;
@@ -148,10 +112,6 @@ class DataModel {
       })
     };
     return filtered;
-  }
-
-  clearCache() {
-    this.cache.clear();
   }
 }
 
