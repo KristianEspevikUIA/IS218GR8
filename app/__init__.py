@@ -2,11 +2,15 @@
 Flask Web Application for Interactive Web Map
 MVC Architecture with Folium, GeoPandas, and OGC API support
 """
+import os
 from flask import Flask, render_template, request, jsonify
 from app.controllers.app_controller import AppController
 
+# Calculate the correct template folder path
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+template_folder = os.path.join(base_dir, 'templates')
 
-app = Flask(__name__, template_folder='templates')
+app = Flask(__name__, template_folder=template_folder)
 controller = AppController()
 
 

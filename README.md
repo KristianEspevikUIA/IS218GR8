@@ -102,59 +102,151 @@ A Python Flask web map that loads geographic data from multiple sources (GeoJSON
 ## Installation & Setup
 
 ### Prerequisites
-- Python 3.11+ (download from https://www.python.org/)
-- pip (comes with Python)
+- **Python 3.11+** (download from https://www.python.org/)
+- **pip** (included with Python)
+- **Visual Studio Code** (optional but recommended)
 - Modern web browser (Chrome, Firefox, Safari, Edge)
 
-### Quick Start (Windows)
+### Quick Start - VS Code (Recommended ⭐)
 
-1. **Clone the repository**
+**Fastest way to run the application on Windows or Mac:**
+
+1. **Open the project in VS Code**
+```bash
+git clone https://github.com/KristianEspevikUIA/IS218GR8.git
+cd IS218GR8
+code .
+```
+
+2. **Install Python Extension**
+   - Open Extensions (Ctrl+Shift+X)
+   - Search for "Python"
+   - Install the official Python extension by Microsoft
+
+3. **Run with Ctrl+Shift+B**
+   - Press **Ctrl+Shift+B** (Windows) or **Cmd+Shift+B** (Mac)
+   - Select "**Run Flask Web Map**" task
+   - VS Code automatically installs dependencies and starts the server
+
+4. **Open in browser**
+   - Navigate to `http://localhost:5000`
+   - Map loads with interactive features ready to use
+
+**OR Debug with F5:**
+   - Press **F5** to launch Flask with Python debugger attached
+   - Set breakpoints in code
+   - Server runs on `http://localhost:5000`
+
+### Quick Start - Command Line (Windows)
+
+1. **Clone and enter directory**
 ```bash
 git clone https://github.com/KristianEspevikUIA/IS218GR8.git
 cd IS218GR8
 ```
 
-2. **Run the application**
-Double-click `python_app/run.bat` 
-OR in terminal:
+2. **Install dependencies**
 ```bash
-cd python_app
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
+```
+
+3. **Run the server**
+```bash
 python run.py
 ```
 
-3. **Open in browser**
+4. **Open in browser**
 Navigate to `http://localhost:5000`
 
-### Quick Start (Mac/Linux)
+### Quick Start - Command Line (Mac/Linux)
 
-1. **Clone the repository**
+1. **Clone and enter directory**
 ```bash
 git clone https://github.com/KristianEspevikUIA/IS218GR8.git
 cd IS218GR8
 ```
 
-2. **Run the application**
-```bash
-cd python_app
-bash run.sh
-```
-OR manually:
+2. **Create virtual environment** (optional but recommended)
 ```bash
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
+```
+
+3. **Install dependencies**
+```bash
 pip install -r requirements.txt
+```
+
+4. **Run the server**
+```bash
 python3 run.py
 ```
 
-3. **Open in browser**
+5. **Open in browser**
 Navigate to `http://localhost:5000`
 
-### VS Code Integration
+---
 
-1. Press **Ctrl+Shift+B** (or **Cmd+Shift+B** on Mac)
-2. Select "Python: Run Flask Web Map" from the task menu
-3. Server starts automatically on `http://localhost:5000`
+## VS Code Quick Reference
+
+### Keyboard Shortcuts
+
+| Action | Windows | Mac |
+|--------|---------|-----|
+| **Run Flask Server** | Ctrl+Shift+B | Cmd+Shift+B |
+| **Debug Flask (F5)** | F5 | F5 |
+| **Open Terminal** | Ctrl+` | Ctrl+` |
+| **Run Task** | Ctrl+Shift+B | Cmd+Shift+B |
+
+### Step-by-Step: Running from VS Code
+
+**1. Open the workspace folder**
+```
+File > Open Folder > IS218GR8
+```
+
+**2. Install Python extension** (if not already installed)
+```
+Ctrl+Shift+X > Search "Python" > Install
+```
+
+**3. Select Python interpreter** (optional but recommended)
+```
+Ctrl+Shift+P > "Python: Select Interpreter" > Choose 3.11 or higher
+```
+
+**4. Start the server with Ctrl+Shift+B**
+```
+Ctrl+Shift+B (Windows) or Cmd+Shift+B (Mac)
+↓
+Choose "Run Flask Web Map"
+↓
+Dependencies install automatically
+↓
+Server starts on http://localhost:5000
+↓
+Flask outputs: "Running on http://127.0.0.1:5000"
+```
+
+**5. Open browser and navigate to**
+```
+http://localhost:5000
+```
+
+### Debugging in VS Code
+
+Press **F5** to start Flask with debugger attached:
+```
+F5
+↓
+Server starts in debug mode
+↓
+Set breakpoints by clicking left margin in code
+↓
+Debugger stops at breakpoints when code runs
+↓
+Step through code with F10 (step over) or F11 (step into)
+```
 
 ---
 
@@ -203,25 +295,25 @@ curl -X POST http://localhost:5000/api/search \
 
 ```
 IS218GR8/
-├── python_app/
-│   ├── app/
-│   │   ├── models/
-│   │   │   ├── __init__.py
-│   │   │   ├── data_model.py      # Data fetching & spatial ops
-│   │   │   └── map_model.py       # Map state management
-│   │   ├── views/
-│   │   │   ├── __init__.py
-│   │   │   └── map_view.py        # Folium map rendering
-│   │   ├── controllers/
-│   │   │   ├── __init__.py
-│   │   │   └── app_controller.py  # Application logic
-│   │   └── __init__.py            # Flask app & routes
-│   ├── templates/
-│   │   └── index.html             # Main template
-│   ├── requirements.txt           # Python dependencies
-│   ├── run.py                     # Python entry point
-│   ├── run.bat                    # Windows launcher
-│   └── run.sh                     # Mac/Linux launcher
+├── app/
+│   ├── __init__.py                # Flask app initialization & routes
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── data_model.py          # Data fetching & spatial operations
+│   │   └── map_model.py           # Map state management
+│   ├── views/
+│   │   ├── __init__.py
+│   │   └── map_view.py            # Folium map rendering
+│   └── controllers/
+│       ├── __init__.py
+│       └── app_controller.py      # Application orchestration & logic
+├── templates/
+│   └── index.html                 # Jinja2 template for web UI
+├── .vscode/
+│   ├── tasks.json                 # VS Code build tasks (cross-platform)
+│   └── launch.json                # VS Code Python debugger config
+├── run.py                         # Flask entry point
+├── requirements.txt               # Python dependencies
 ├── .gitignore                     # Git ignore rules
 ├── README.md                      # This file
 └── LICENSE                        # MIT License
