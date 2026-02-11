@@ -13,13 +13,13 @@ if __name__ == '__main__':
     print("Interactive Web Map - Python Flask + MVC")
     print("=" * 50)
     print()
-    print("✓ Starting Flask server on http://localhost:5000")
+    print("✓ Starting Flask server on http://localhost:3000")
     print("✓ Press Ctrl+C to stop the server")
     print()
     
     try:
         controller.initialize()
-        app.run(debug=True, port=5000, use_reloader=False)
+        app.run(debug=True, port=3000, use_reloader=False)
     except KeyboardInterrupt:
         print("\n\n✓ Server stopped")
         sys.exit(0)

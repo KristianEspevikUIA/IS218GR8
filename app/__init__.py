@@ -151,5 +151,198 @@ def get_data_sources():
     return jsonify(sources)
 
 
+# ==================== SUPABASE API ENDPOINTS ====================
+
+@app.route('/api/supabase/places', methods=['GET'])
+def get_supabase_places():
+    """
+    Fetch all places from Supabase
+    Returns list of place records
+    """
+    try:
+        places = controller.data_model.get_all_locations()
+        return jsonify({
+            'status': 'success',
+            'count': len(places),
+            'data': places
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+
+@app.route('/api/supabase/places/<int:place_id>', methods=['GET'])
+def get_supabase_place(place_id):
+    """
+    Fetch a specific place from Supabase by ID
+    """
+    try:
+        place = controller.data_model.get_location_by_id(place_id)
+        if place:
+            return jsonify({
+                'status': 'success',
+                'data': place
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': f'Place {place_id} not found'
+            }), 404
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+
+@app.route('/api/supabase/places', methods=['POST'])
+def create_supabase_place():
+    """
+    Create a new place in Supabase
+    Expects JSON: {
+        name: str, 
+        description: str, 
+        city: str,
+        category: str,
+        latitude: float, 
+        longitude: float
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['name', 'description', 'city', 'category', 'latitude', 'longitude']
+        if not all(key in data for key in required_fields):
+            return jsonify({
+                'status': 'error',
+                'message': f'Missing required fields: {", ".join(required_fields)}'
+            }), 400
+        
+        # Insert into Supabase
+        result = controller.data_model.insert_place(
+            name=data['name'],
+            description=data['description'],
+            city=data['city'],
+            category=data['category'],
+            latitude=float(data['latitude']),
+            longitude=float(data['longitude'])
+        )
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Place created successfully',
+            'data': result
+        }), 201
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+
+@app.route('/api/supabase/places/<int:place_id>', methods=['PUT'])
+def update_supabase_place(place_id):
+    """
+    Update a place in Supabase
+    Expects JSON with fields to update
+    """
+    try:
+        data = request.get_json()
+        result = controller.data_model.update_supabase('places', place_id, data)
+        
+        if result:
+            return jsonify({
+                'status': 'success',
+                'message': 'Place updated successfully',
+                'data': result
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': f'Place {place_id} not found'
+            }), 404
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+
+@app.route('/api/supabase/places/<int:place_id>', methods=['DELETE'])
+def delete_supabase_place(place_id):
+    """
+    Delete a place from Supabase
+    """
+    try:
+        success = controller.data_model.delete_supabase('places', place_id)
+        
+        if success:
+            return jsonify({
+                'status': 'success',
+                'message': f'Place {place_id} deleted successfully'
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': f'Could not delete place {place_id}'
+            }), 404
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+
+@app.route('/api/supabase/places/nearby', methods=['POST'])
+def get_nearby_places():
+    """
+    Find places near a point using PostGIS spatial query
+    Uses places_within_radius() RPC function
+    Expects JSON: {latitude: float, longitude: float, radius_km: float}
+    """
+    try:
+        data = request.get_json()
+        latitude = float(data.get('latitude'))
+        longitude = float(data.get('longitude'))
+        radius_km = float(data.get('radius_km', 10))
+        
+        # Use PostGIS function for efficient spatial query
+        nearby_places = controller.data_model.places_within_radius(latitude, longitude, radius_km)
+        
+        return jsonify({
+            'status': 'success',
+            'count': len(nearby_places),
+            'search_point': {'latitude': latitude, 'longitude': longitude},
+            'radius_km': radius_km,
+            'data': nearby_places
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+
+@app.route('/api/supabase/places/city/<city>', methods=['GET'])
+def get_places_by_city(city):
+    """
+    Get all places in a specific city
+    :param city: City name
+    """
+    try:
+        places = controller.data_model.get_places_by_city(city)
+        return jsonify({
+            'status': 'success',
+            'city': city,
+            'count': len(places),
+            'data': places
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+
+@app.route('/api/supabase/places/category/<category>', methods=['GET'])
+def get_places_by_category(category):
+    """
+    Get all places in a specific category
+    :param category: Category name (landmark, church, nature, sport, park, castle, etc.)
+    """
+    try:
+        places = controller.data_model.get_places_by_category(category)
+        return jsonify({
+            'status': 'success',
+            'category': category,
+            'count': len(places),
+            'data': places
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
