@@ -3,8 +3,12 @@ Flask Web Application for Interactive Web Map
 MVC Architecture with Folium, GeoPandas, and OGC API support
 """
 import os
+from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify
 from app.controllers.app_controller import AppController
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Calculate the correct template folder path
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -25,6 +25,10 @@ class AppController:
             # Load embedded data
             self.load_embedded_data()
             
+            # Load AED data from API
+            print("\nLoading AED data from Hjertestarterregister...")
+            self.load_aeds()
+            
             # Create map view
             self.map_view = MapView(
                 center=self.map_model.map_center,
@@ -55,6 +59,11 @@ class AppController:
             'name': 'GeoNorge API Data'
         })
         
+        self.data_model.register_source('hjertestarterregister', {
+            'type': 'api',
+            'name': 'AED Locations (Hjertestarterregister)'
+        })
+        
         self.map_model.add_layer('geojson-local', {
             'name': 'Local GeoJSON Data',
             'color': '#3388ff',
@@ -65,6 +74,12 @@ class AppController:
             'name': 'GeoNorge API Data',
             'color': '#ff8c00',
             'visible': False
+        })
+        
+        self.map_model.add_layer('hjertestarterregister', {
+            'name': 'AED Locations',
+            'color': '#ff1744',  # Red for AEDs
+            'visible': True
         })
 
     def load_embedded_data(self):
@@ -232,6 +247,32 @@ class AppController:
         except Exception as e:
             print(f"✗ Search error: {e}")
             return []
+
+    def load_aeds(self, latitude: float = None, longitude: float = None, 
+                  distance: int = 99999) -> bool:
+        """
+        Load AED data from Hjertestarterregister API
+        :param latitude: Center latitude (uses Norway center if None)
+        :param longitude: Center longitude (uses Norway center if None)
+        :param distance: Search distance in meters
+        :return: Success status
+        """
+        try:
+            geojson = self.data_model.fetch_hjertestarterregister(
+                latitude=latitude,
+                longitude=longitude,
+                distance=distance
+            )
+            
+            if geojson and geojson['features']:
+                self.map_model.set_layer_features('hjertestarterregister', 
+                                                  geojson['features'])
+                print(f"✓ Loaded {len(geojson['features'])} AEDs")
+                return True
+            return False
+        except Exception as e:
+            print(f"✗ Error loading AEDs: {e}")
+            return False
 
     def get_map_html(self) -> str:
         """Get map as HTML for rendering"""

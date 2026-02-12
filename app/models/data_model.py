@@ -82,6 +82,55 @@ class DataModel:
         
         return filtered
 
+    def fetch_hjertestarterregister(self, latitude: float = None, longitude: float = None, 
+                                   distance: int = 99999) -> Dict:
+        """
+        Fetch AED locations from Hjertestarterregister API
+        :param latitude: Center latitude (uses Norway center if None)
+        :param longitude: Center longitude (uses Norway center if None)
+        :param distance: Search distance in meters
+        :return: GeoJSON data of AEDs
+        """
+        from app.models.hjertestarterregister_api import HjertestarterregisterAPI
+        
+        try:
+            api = HjertestarterregisterAPI()
+            
+            # Try to authenticate if credentials are available
+            if api.client_id and api.client_secret:
+                print("Attempting to authenticate with Hjertestarterregister API...")
+                api.authenticate()
+            
+            # If no coordinates provided, search entire Norway
+            if latitude is None or longitude is None:
+                latitude = 60.4518  # Norway center
+                longitude = 8.4689
+            
+            print(f"Fetching AEDs from Hjertestarterregister API...")
+            print(f"  Center: ({latitude}, {longitude})")
+            print(f"  Distance: {distance}m")
+            
+            # Search for assets
+            response = api.search_assets(
+                latitude=latitude,
+                longitude=longitude,
+                distance=distance,
+                max_rows=5000
+            )
+            
+            if response:
+                # Convert to GeoJSON
+                geojson = api.convert_to_geojson(response)
+                print(f"✓ Fetched {geojson['metadata']['total_count']} AEDs")
+                return geojson
+            else:
+                print("✗ Failed to fetch from API")
+                return {"type": "FeatureCollection", "features": []}
+        
+        except Exception as e:
+            print(f"✗ Error fetching Hjertestarterregister data: {e}")
+            return {"type": "FeatureCollection", "features": []}
+
     def store_data(self, name: str, data: Dict):
         """Store loaded data for later use"""
         self.loaded_data[name] = data
