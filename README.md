@@ -1,4 +1,4 @@
-# Interaktivt nettfart - Python Flask + MVC Architecture
+# Interaktivt nettKart - Python Flask + MVC Architecture
 
 ## Prosjektoversikt
 
