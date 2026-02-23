@@ -24,10 +24,10 @@ class MapView:
     def add_geojson_layer(self, layer_id: str, features: List[Dict], 
                          color: str = '#3388ff', popup_fields: List[str] = None):
         """
-        Add GeoJSON layer to map
+        Add GeoJSON layer to map with data-driven styling
         :param layer_id: Unique layer identifier
         :param features: List of GeoJSON features
-        :param color: Layer color
+        :param color: Default layer color (used if no specific style applies)
         :param popup_fields: Fields to show in popup
         """
         feature_group = folium.FeatureGroup(name=layer_id)
@@ -35,6 +35,19 @@ class MapView:
         for feature in features:
             geometry = feature.get('geometry', {})
             properties = feature.get('properties', {})
+            
+            # Data-driven styling based on property 'type'
+            feature_color = color
+            if 'type' in properties:
+                type_val = properties['type']
+                if type_val == 'Government Building':
+                    feature_color = '#795548'  # Brown
+                elif type_val == 'Port':
+                    feature_color = '#2196f3'  # Blue
+                elif type_val == 'Religious Building':
+                    feature_color = '#9c27b0'  # Purple
+                elif type_val == 'Infrastructure':
+                    feature_color = '#607d8b'  # Grey
             
             if geometry['type'] == 'Point':
                 coords = geometry['coordinates']
@@ -44,22 +57,22 @@ class MapView:
                 
                 folium.CircleMarker(
                     location=[coords[1], coords[0]],  # (lat, lng)
-                    radius=6,
+                    radius=8,
                     popup=folium.Popup(popup_html, max_width=300),
-                    color=color,
+                    color=feature_color,
                     fill=True,
-                    fillColor=color,
+                    fillColor=feature_color,
                     fillOpacity=0.7,
                     weight=2,
-                    opacity=0.8
+                    opacity=0.9
                 ).add_to(feature_group)
                 
             elif geometry['type'] == 'LineString':
                 coords = [[c[1], c[0]] for c in geometry['coordinates']]
                 folium.PolyLine(
                     coords,
-                    color=color,
-                    weight=2,
+                    color=feature_color,
+                    weight=4,
                     opacity=0.8,
                     popup=folium.Popup(self._create_popup(properties, popup_fields), 
                                       max_width=300)

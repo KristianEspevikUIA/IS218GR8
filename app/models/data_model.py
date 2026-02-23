@@ -1,4 +1,4 @@
-    """
+"""
 DataModel.py - Handles geographic data fetching and spatial operations
 Supports GeoJSON, OGC APIs, and PostGIS/Supabase
 """
@@ -30,8 +30,9 @@ class DataModel:
                 client = create_client(supabase_url, supabase_key)
                 print("✓ Supabase client initialized successfully")
                 return client
-            except ImportError:
-                print("⚠ Supabase library not installed. Install with: pip install supabase")
+            except ImportError as e:
+                print(f"⚠ Supabase library import error: {e}")
+                print("Make sure to install with: pip install supabase")
                 return None
             except Exception as e:
                 print(f"⚠ Error initializing Supabase client: {e}")
@@ -259,6 +260,7 @@ class DataModel:
                     'radius_km': radius_km
                 }
             ).execute()
+            # Handle both direct list and object response formats
             return response.data if hasattr(response, 'data') else response
         except Exception as e:
             print(f"Error calling places_within_radius: {e}")
