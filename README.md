@@ -5,7 +5,7 @@
 **InteractiveMap** er eit responsivt Python-basert nettfartprogram som kombinerer statiske geografiske data, eksterne OGC API-ar, og valgfri romleg databasetjenester (PostGIS/Supabase) til ein einaste interaktiv kartografisk opplevnad. Bygd med **Flask**, **Folium**, og **GeoPandas**, demonstrerer denne applikasjonen beste praksis for å handtera geografiske dataflolar, koordinatsystemtransformasjonar, og interaktive kartvisualiseringar ved bruk av **MVC (Model-View-Controller)** arkitektur.
 
 ### TLDR
-Eit Python Flask nettfart som lastar geografiske data frå fleire kjelder (GeoJSON, OGC API-ar, PostGIS-databasar), visualiserer dei interaktivt med Folium, støttar romleg filtrering etter avstand ved bruk av Haversine-formelen, og skil konsekvent konsern med MVC-arkitektur.
+Eit Python Flask nettkart som lastar geografiske data frå fleire kjelder (GeoJSON, OGC API-ar, PostGIS-databasar), visualiserer dei interaktivt med Folium, støttar romleg filtrering etter avstand ved bruk av Haversine-formelen, og skil konsekvent konsern med MVC-arkitektur.
 
 ---
 
