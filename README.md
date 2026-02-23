@@ -1,52 +1,52 @@
-# Interactive Web Map - Python Flask + MVC Architecture
+# Interaktivt nettfart - Python Flask + MVC Architecture
 
-## Project Overview
+## Prosjektoversikt
 
-**InteractiveMap** is a responsive Python-based web mapping application that combines static geographic data, external OGC APIs, and optional spatial database services (PostGIS/Supabase) into a single interactive cartographic experience. Built with **Flask**, **Folium**, and **GeoPandas**, this application demonstrates best practices for managing geographic data flows, coordinate system transformations, and interactive map visualizations using **MVC (Model-View-Controller)** architecture.
+**InteractiveMap** er eit responsivt Python-basert nettfartprogram som kombinerer statiske geografiske data, eksterne OGC API-ar, og valgfri romleg databasetjenester (PostGIS/Supabase) til ein einaste interaktiv kartografisk opplevnad. Bygd med **Flask**, **Folium**, og **GeoPandas**, demonstrerer denne applikasjonen beste praksis for å handtera geografiske dataflolar, koordinatsystemtransformasjonar, og interaktive kartvisualiseringar ved bruk av **MVC (Model-View-Controller)** arkitektur.
 
 ### TLDR
-A Python Flask web map that loads geographic data from multiple sources (GeoJSON, OGC APIs, PostGIS databases), visualizes them interactively with Folium, supports spatial filtering by distance using Haversine formula, and cleanly separates concerns with MVC architecture.
+Eit Python Flask nettfart som lastar geografiske data frå fleire kjelder (GeoJSON, OGC API-ar, PostGIS-databasar), visualiserer dei interaktivt med Folium, støttar romleg filtrering etter avstand ved bruk av Haversine-formelen, og skil konsekvent konsern med MVC-arkitektur.
 
 ---
 
-## Features
+## Funksjonar
 
-- ✅ **Multi-source Data Loading**: GeoJSON data + OGC APIs + Supabase PostGIS support
-- ✅ **Interactive Map Rendering**: Folium-based interactive map with Leaflet backend
-- ✅ **Spatial Search**: Filter features within specified distance radius
-- ✅ **OGC API Integration**: Support for WFS and other OGC-compliant services
-- ✅ **Data-Driven Styling**: Customize layer appearance based on properties
-- ✅ **MVC Architecture**: Clean separation of Models, Views, and Controllers
-- ✅ **Responsive Design**: Works on desktop and mobile browsers
-- ✅ **REST API**: JSON endpoints for search and data operations
-
----
-
-## Technical Stack
-
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **Python** | 3.11+ | Programming language |
-| **Flask** | 3.0.0 | Web framework |
-| **Folium** | 0.14.0 | Interactive mapping library (Leaflet wrapper) |
-| **GeoPandas** | 0.14.0 | Geographic data analysis |
-| **Requests** | 2.31.0 | HTTP API calls |
-| **Geopy** | 2.4.0 | Geocoding and distance calculations |
+- ✅ **Flerkildedata-lasting**: GeoJSON-data + OGC API-ar + Supabase PostGIS-støtte
+- ✅ **Interaktiv kartgjengiving**: Folium-basert interaktivt kart med Leaflet-backend
+- ✅ **Romleg søk**: Filtrer funksjonar innanfor spesifisert avstandsradius
+- ✅ **OGC API-integrasjon**: Støtte for WFS og andre OGC-kompatible tenester
+- ✅ **Datadriven stilisering**: Tilpass laginaut basert på eigenskapar
+- ✅ **MVC-arkitektur**: Ren separasjon av modellar, syn og kontrollsystemar
+- ✅ **Responsivt design**: Fungerer på skrivebord og mobilnettlesarar
+- ✅ **REST API**: JSON-endepoint for søk og datakjelder
 
 ---
 
-## Data Catalog
+## Teknisk stabel
 
-| Dataset | Source | Format | Processing |
+| Komponent | Versjon | Formål |
+|-----------|---------|--------|
+| **Python** | 3.11+ | Programmeringsspråk |
+| **Flask** | 3.0.0 | Nettverkrammeverk |
+| **Folium** | 0.14.0 | Interaktiv kartbibliotek (Leaflet-omslag) |
+| **GeoPandas** | 0.14.0 | Geografisk dataanalyse |
+| **Requests** | 2.31.0 | HTTP API-anrop |
+| **Geopy** | 2.4.0 | Geokodering og avstandsutrekningar |
+
+---
+
+## Datakatalog
+
+| Datasett | Kjelde | Format | Prosessering |
 |---------|--------|--------|-----------|
-| Norwegian Cities & Landmarks | Embedded GeoJSON | Point/LineString features | Manually curated from OSM data |
-| GeoNorge API | External WFS/WMS | GeoJSON (via fetch) | Real-time HTTP requests to OGC services |
-| PostGIS Database | Supabase | JSON (via API) | SQL spatial queries with PostGIS functions |
-| OpenStreetMap Basemap | Mapnik tiles | XYZ Raster Tiles | Served via CDN |
+| Norske byar og merknader | Innebygd GeoJSON | Point/LineString-funksjonar | Manuelt kuratert frå OSM-data |
+| GeoNorge API | Ekstern WFS/WMS | GeoJSON (via henting) | Sanntids HTTP-førespurnader til OGC-tenester |
+| PostGIS-database | Supabase | JSON (via API) | SQL-romleg spørjingar med PostGIS-funksjonar |
+| OpenStreetMap basiskart | Mapnik-flisematter | XYZ rastermatter | Levert via CDN |
 
 ---
 
-## Architecture Overview
+## Arkitekturoveverikt
 
 ```
 ┌──────────────────────────────────┐
@@ -82,189 +82,146 @@ A Python Flask web map that loads geographic data from multiple sources (GeoJSON
  └─────┘  └─────────┘  └─────────┘  └──────┘
 ```
 
-**MVC Components:**
+**MVC-komponentar:**
 
-**Models** (`app/models/`)
-- `DataModel.py`: Data fetching from multiple sources, spatial operations (Haversine distance)
-- `MapModel.py`: Map state, layer management, viewport control
+**Modellar** (`app/models/`)
+- `DataModel.py`: Datahenting frå fleire kilder, romleg operasjonar (Haversine-avstand)
+- `MapModel.py`: Karttilstand, lagstyre, viewport-kontroll
 
-**Views** (`app/views/`)
-- `MapView.py`: Renders interactive Folium/Leaflet maps, layer visualization
+**Syn** (`app/views/`)
+- `MapView.py`: Gjengivar interaktive Folium/Leaflet-kart, lagvisualisering
 
-**Controllers** (`app/controllers/`)
-- `AppController.py`: Orchestrates initialization, event handling, data loading logic
+**Kontrollsystemar** (`app/controllers/`)
+- `AppController.py`: Orkesterar initialisering, hendingehandtering, datalastingslogikk
 
-**Flask App** (`app/__init__.py`)
-- REST API endpoints for searching, OGC API fetching, map export
+**Flask-app** (`app/__init__.py`)
+- REST API-endepoint for søk, OGC API-henting, karteksport
 
 ---
 
-## Installation & Setup
+## Installasjon og oppsett
 
-### Prerequisites
-- **Python 3.11+** (download from https://www.python.org/)
-- **pip** (included with Python)
-- **Visual Studio Code** (optional but recommended)
-- Modern web browser (Chrome, Firefox, Safari, Edge)
+### Føresetnadar
+- **Python 3.11+** (last ned frå https://www.python.org/)
+- **pip** (inkludert med Python)
+- **Visual Studio Code** (valfritt men tilrådd)
+- Moderni nettlesar (Chrome, Firefox, Safari, Edge)
 
-### Quick Start - VS Code (Recommended ⭐)
+**⚠️ Merk:** Prosjektet er no berre konfigurert og testt på Mac. Det er ikkje i ein ønskeleg tilstand.
 
-**Fastest way to run the application on Windows or Mac:**
+### Rask start - Mac
 
-1. **Open the project in VS Code**
-```bash
-git clone https://github.com/KristianEspevikUIA/IS218GR8.git
-cd IS218GR8
-code .
-```
-
-2. **Install Python Extension**
-   - Open Extensions (Ctrl+Shift+X)
-   - Search for "Python"
-   - Install the official Python extension by Microsoft
-
-3. **Run with Ctrl+Shift+B**
-   - Press **Ctrl+Shift+B** (Windows) or **Cmd+Shift+B** (Mac)
-   - Select "**Run Flask Web Map**" task
-   - VS Code automatically installs dependencies and starts the server
-
-4. **Open in browser**
-   - Navigate to `http://localhost:5000`
-   - Map loads with interactive features ready to use
-
-**OR Debug with F5:**
-   - Press **F5** to launch Flask with Python debugger attached
-   - Set breakpoints in code
-   - Server runs on `http://localhost:5000`
-
-### Quick Start - Command Line (Windows)
-
-1. **Clone and enter directory**
+1. **Klon og gå inn i mappa**
 ```bash
 git clone https://github.com/KristianEspevikUIA/IS218GR8.git
 cd IS218GR8
 ```
 
-2. **Install dependencies**
-```bash
-python -m pip install -r requirements.txt
-```
-
-3. **Run the server**
-```bash
-python run.py
-```
-
-4. **Open in browser**
-Navigate to `http://localhost:5000`
-
-### Quick Start - Command Line (Mac/Linux)
-
-1. **Clone and enter directory**
-```bash
-git clone https://github.com/KristianEspevikUIA/IS218GR8.git
-cd IS218GR8
-```
-
-2. **Create virtual environment** (optional but recommended)
+2. **Opprett virtuelt miljø** (tilrådd)
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
-3. **Install dependencies**
+3. **Installer avhengigheiter**
 ```bash
 pip install -r requirements.txt
 ```
 
-4. **Run the server**
+4. **Køyr serveren**
 ```bash
 python3 run.py
 ```
 
-5. **Open in browser**
-Navigate to `http://localhost:5000`
+5. **Opne i nettlesar**
+Naviger til `http://localhost:5000`
+
+**Med VS Code (anbefalt):**
+- Opne prosjektet: `code .`
+- Installer Python-utvidinga (Ctrl+Shift+X)
+- Køyr med Cmd+Shift+B
+- Vel "Run Flask Web Map"
 
 ---
 
-## VS Code Quick Reference
+## VS Code hurtigreferanse
 
-### Keyboard Shortcuts
+### Tastatursnarvegar
 
-| Action | Windows | Mac |
-|--------|---------|-----|
-| **Run Flask Server** | Ctrl+Shift+B | Cmd+Shift+B |
-| **Debug Flask (F5)** | F5 | F5 |
-| **Open Terminal** | Ctrl+` | Ctrl+` |
-| **Run Task** | Ctrl+Shift+B | Cmd+Shift+B |
+| Handling | Mac |
+|--------|-----|
+| **Køyr Flask-server** | Cmd+Shift+B |
+| **Debug Flask (F5)** | F5 |
+| **Opne terminal** | Ctrl+` |
+| **Køyr oppgåve** | Cmd+Shift+B |
 
-### Step-by-Step: Running from VS Code
+### Steg-for-steg: Kjøring frå VS Code
 
-**1. Open the workspace folder**
+**1. Opne arbeidsflata**
 ```
 File > Open Folder > IS218GR8
 ```
 
-**2. Install Python extension** (if not already installed)
+**2. Installer Python-utvidinga** (viss ikkje allereie installert)
 ```
-Ctrl+Shift+X > Search "Python" > Install
-```
-
-**3. Select Python interpreter** (optional but recommended)
-```
-Ctrl+Shift+P > "Python: Select Interpreter" > Choose 3.11 or higher
+Cmd+Shift+X > Søk "Python" > Installer
 ```
 
-**4. Start the server with Ctrl+Shift+B**
+**3. Vel Python-tolkar** (valfritt men tilrådd)
 ```
-Ctrl+Shift+B (Windows) or Cmd+Shift+B (Mac)
-↓
-Choose "Run Flask Web Map"
-↓
-Dependencies install automatically
-↓
-Server starts on http://localhost:5000
-↓
-Flask outputs: "Running on http://127.0.0.1:5000"
+Cmd+Shift+P > "Python: Select Interpreter" > Vel 3.11 eller høgare
 ```
 
-**5. Open browser and navigate to**
+**4. Start serveren med Cmd+Shift+B**
+```
+Cmd+Shift+B
+↓
+Vel "Run Flask Web Map"
+↓
+Avhengigheiter installera automatisk
+↓
+Server startar på http://localhost:5000
+↓
+Flask skriver ut: "Running on http://127.0.0.1:5000"
+```
+
+**5. Opne nettlesar og naviger til**
 ```
 http://localhost:5000
 ```
 
-### Debugging in VS Code
+### Debugging i VS Code
 
-Press **F5** to start Flask with debugger attached:
+Trykk **F5** for å starta Flask med feilsøkjar:
 ```
 F5
 ↓
-Server starts in debug mode
+Server startar i feilsøkingsmodus
 ↓
-Set breakpoints by clicking left margin in code
+Set bruddpunkt ved å klikka på venstre marg i kode
 ↓
-Debugger stops at breakpoints when code runs
+Feilsøkjar stoppar på bruddpunkt når koden køyrer
 ↓
-Step through code with F10 (step over) or F11 (step into)
+Steg gjennom kode med F10 (steg over) eller F11 (steg inn)
 ```
 
 ---
 
-## Usage Guide
+## Bruksrettleiing
 
-### Basic Map Interaction
-- **Pan**: Click and drag the map
-- **Zoom**: Scroll wheel or use zoom controls
-- **View Details**: Click on any feature to see popup
+### Grunnleggjande kartinteraksjon
+- **Flytt**: Klikk og drag kartet
+- **Zoom**: Rullehjulet eller bruk zoom-kontrollane
+- **Vis detaljar**: Klikk på ein funksjon for å sjå popup
 
-### Spatial Search
-1. **Click on the map** to set the search center point
-2. Enter a **radius (km)** in the right panel
-3. Click **"Search by Distance"**
-4. Results light up in red with search radius visualization
+### Romleg søk
+1. **Klikk på kartet** for å setja søksenterpunktet
+2. Skriv inn ein **radius (km)** i høgre panel
+3. Klikk **"Search by Distance"**
+4. Resultat lyser opp i raudt med søkradiusvisualisering
 
-### OGC API Integration
-Call the `/api/ogc-api` endpoint:
+### OGC API-integrasjon
+Kall `/api/ogc-api`-endepoint:
 ```bash
 curl -X POST http://localhost:5000/api/ogc-api \
   -H "Content-Type: application/json" \
@@ -278,7 +235,7 @@ curl -X POST http://localhost:5000/api/ogc-api \
   }'
 ```
 
-### Spatial Search via API
+### Romleg søk via API
 ```bash
 curl -X POST http://localhost:5000/api/search \
   -H "Content-Type: application/json" \
@@ -291,65 +248,65 @@ curl -X POST http://localhost:5000/api/search \
 
 ---
 
-## Project Structure
+## Prosjektstruktur
 
 ```
 IS218GR8/
 ├── app/
-│   ├── __init__.py                # Flask app initialization & routes
+│   ├── __init__.py                # Flask-appinitialisering & ruter
 │   ├── models/
 │   │   ├── __init__.py
-│   │   ├── data_model.py          # Data fetching & spatial operations
-│   │   └── map_model.py           # Map state management
+│   │   ├── data_model.py          # Datahenting & romleg operasjonar
+│   │   └── map_model.py           # Karttilstandsstyring
 │   ├── views/
 │   │   ├── __init__.py
-│   │   └── map_view.py            # Folium map rendering
+│   │   └── map_view.py            # Folium-kartgjengiving
 │   └── controllers/
 │       ├── __init__.py
-│       └── app_controller.py      # Application orchestration & logic
+│       └── app_controller.py      # Applikasjon-orkestrasjon & logikk
 ├── templates/
-│   └── index.html                 # Jinja2 template for web UI
+│   └── index.html                 # Jinja2-mal for web-UI
 ├── .vscode/
-│   ├── tasks.json                 # VS Code build tasks (cross-platform)
-│   └── launch.json                # VS Code Python debugger config
-├── run.py                         # Flask entry point
-├── requirements.txt               # Python dependencies
-├── .gitignore                     # Git ignore rules
-├── README.md                      # This file
-└── LICENSE                        # MIT License
+│   ├── tasks.json                 # VS Code byggjeopgåver (kryssplattform)
+│   └── launch.json                # VS Code Python-feilsøkjar-konfigurasjon
+├── run.py                         # Flask startpunkt
+├── requirements.txt               # Python-avhengigheiter
+├── .gitignore                     # Git-ignoreradarregler
+├── README.md                      # Denne fila
+└── LICENSE                        # MIT-lisens
 ```
 
 ---
 
-## API Endpoints
+## API-endepoint
 
 ### GET `/`
-Renders the main map interface with data catalog
+Gjengivar hovudfartinterface med datakatalog
 
 ### POST `/api/search`
-Spatial search by distance
-- **Request**: `{"lat": float, "lng": float, "radius_km": float}`
-- **Response**: `{"status": "success", "count": int, "features": [], "search_point": {}, "radius_km": float}`
+Romleg søk etter avstand
+- **Førespurnad**: `{"lat": float, "lng": float, "radius_km": float}`
+- **Svar**: `{"status": "success", "count": int, "features": [], "search_point": {}, "radius_km": float}`
 
 ### POST `/api/ogc-api`
-Fetch data from OGC APIs
-- **Request**: `{"url": "string", "params": {}}`
-- **Response**: `{"status": "success", "message": "string"}`
+Hent data frå OGC API-ar
+- **Førespurnad**: `{"url": "string", "params": {}}`
+- **Svar**: `{"status": "success", "message": "string"}`
 
 ### GET `/api/data-sources`
-List registered data sources
-- **Response**: `[{"id": "string", "name": "string", "type": "string", "visible": bool}]`
+List registrerte datakilder
+- **Svar**: `[{"id": "string", "name": "string", "type": "string", "visible": bool}]`
 
 ### GET `/api/export-map`
-Export map as HTML file
-- **Response**: `{"status": "success", "filepath": "string", "message": "string"}`
+Eksporter kart som HTML-fil
+- **Svar**: `{"status": "success", "filepath": "string", "message": "string"}`
 
 ---
 
-## Configuration
+## Konfigurasjon
 
-### Environment Variables (Optional)
-Create `.env` file in `python_app/` directory:
+### Miljøvariabler (valfritt)
+Opprett `.env`-fil i `python_app/`-mappa:
 ```env
 FLASK_ENV=development
 FLASK_DEBUG=True
@@ -357,7 +314,7 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 ```
 
-Load with:
+Last inn med:
 ```python
 from dotenv import load_dotenv
 load_dotenv()
@@ -365,20 +322,20 @@ load_dotenv()
 
 ---
 
-## Extending the Application
+## Utviding av applikasjonen
 
-### Add a New Data Source
+### Legg til ein nye datakjelde
 ```python
-# In AppController.setup_data_sources()
+# I AppController.setup_data_sources()
 self.data_model.register_source('my-source', {
     'type': 'ogc_api',
     'name': 'My OGC Service'
 })
 ```
 
-### Add Custom Styling
+### Legg til tilpassa stilisering
 ```python
-# In MapView.add_geojson_layer()
+# I MapView.add_geojson_layer()
 self.map_view.add_geojson_layer(
     layer_id='custom',
     features=features,
@@ -386,9 +343,9 @@ self.map_view.add_geojson_layer(
 )
 ```
 
-### Query PostGIS
+### Spørr PostGIS
 ```python
-# In AppController
+# I AppController
 results = self.data_model.query_supabase(
     supabase_client,
     'places',
@@ -398,7 +355,7 @@ results = self.data_model.query_supabase(
 
 ---
 
-## Browser Support
+## Nettlesarstøtte
 
 - Chrome 90+
 - Firefox 88+
@@ -407,46 +364,52 @@ results = self.data_model.query_supabase(
 
 ---
 
-## Reflection & Improvements
+## Refleksjon og forbetringer
 
-### Current Strengths
-- Clean MVC architecture enables testability and maintainability
-- Haversine formula provides accurate geodesic distance calculations
-- Folium generates interactive maps without complex setup
-- Responsive design works across devices
-- REST API allows external integrations
+### Nåværande styrkar
+- Ren MVC-arkitektur mogeld testabilitet og vedlikehaldslyst
+- Haversine-formelen gir nøyaktig geodetisk avstandsutrekningar
+- Folium genererer interaktive kart utan kompleks oppsett
+- Responsivt design fungerer på tversplattform
+- REST API tillater eksterne integrasjonar
 
-### Areas for Improvement
+### Område for forbetring
 
-1. **Authentication & Security**: Currently has no authentication layer. For production, add Flask-Login and secure API endpoints with JWT tokens. Supabase API keys should never be exposed in client-side code.
+1. **Autentisering & sikkerheit**: No har ingen autentiseringslag. For produksjon, legg til Flask-Login og sikra API-endepoint med JWT-token. Supabase API-nøklar må aldri eksporneras i klientkode.
 
-2. **Performance Optimization**: Large feature collections (>10,000) may cause slow rendering. Implement server-side clustering, spatial indexing, or tile-based rendering using MapLibre GL instead of Folium.
+2. **Prestasjonar**: Store funksjonsamlingar (>10.000) kan forårsaka seint gjengifing. Implementer serverside-klynging, romleg indeksering, eller flisbasert gjengiving ved bruk av MapLibre GL i stad for Folium.
 
-3. **Advanced Spatial Analysis**: Current distance filtering is basic. Enhance with polygon intersection, buffer operations, and topology analysis using Shapely or PostGIS SQL queries directly.
+3. **Advanced Spatial Analysis**: Nåværande avstandsfiltrering er grunnleggjande. Forbetra med polygon-skjæring, buffer-operasjonar, og topologi-analyse ved bruk av Shapely eller PostGIS SQL-spørjingar direkte.
 
-4. **Error Handling & Logging**: Add comprehensive try-catch blocks, request validation, and logging to file for debugging production issues.
+4. **Feilhandtering & logaritme**: Legg til omfattande prøva-fang-blokker, førespurnadvalidering, og logaritme til fil for feilsøking av produksjonsproblem.
 
-5. **Testing & CI/CD**: Implement unit tests for models, integration tests for controllers, and automated deployment pipeline using GitHub Actions.
-
----
-
-## License
-
-MIT License - See [LICENSE](LICENSE) file for details
+5. **Testande & CI/CD**: Implementer einingsetest for modellar, integrasjonstestar for kontrollsystemar, og automatisert distribusjonspipeline ved bruk av GitHub Actions.
 
 ---
 
-## Contributors
+## Lisens
 
-- **Kristian Espeviksgård** - MVC architecture implementation with Python Flask & Folium
-
----
-
-## Contact & Support
-
-For issues, questions, or contributions, please open an issue on the [GitHub repository](https://github.com/KristianEspevikUIA/IS218GR8).
+MIT-lisens - Sjå [LICENSE](LICENSE)-fila for detaljar
 
 ---
 
-**Last Updated**: February 11, 2026  
-**Language**: Python 3.11+ with Flask 3.0.0
+## Bidragarar
+
+- **Kristian Espevik** - MVC-arkitektur implementering med Python Flask & Folium
+- **Victor Ziadpour** - OGC API & Supabase integrasjon
+- **Nicolai Stephansen** - Datahenting og spørjingar
+- **Brage Kristoffersen** - Frontend og interaksjon
+- **Amged Mohammed** - Testing og dokumentasjon
+- **Youcef Youcef** - Kartvisualisering og design
+
+---
+
+## Kontakt og støtte
+
+For problema, spørsmål eller bidrag, opne ein issue på [GitHub-arkivet](https://github.com/KristianEspevikUIA/IS218GR8).
+
+---
+
+**Sist oppdatert**: Februar 23, 2026
+**Språk**: Python 3.11+ med Flask 3.0.0
+**Status**: Ikkje i ønskjeleg tilstand - fungerer berre på Mac
