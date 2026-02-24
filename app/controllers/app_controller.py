@@ -3,6 +3,7 @@ AppController.py - Main application controller
 Orchestrates initialization and overall application flow
 """
 import json
+import os
 from typing import Dict, List, Tuple, Optional
 from app.models.map_model import MapModel
 from app.models.data_model import DataModel
@@ -24,6 +25,10 @@ class AppController:
             
             # Load embedded data
             self.load_embedded_data()
+            
+            # Load AED data from API
+            print("\nLoading AED data from Hjertestarterregister...")
+            self.load_aeds()
             
             # Create map view
             self.map_view = MapView(
@@ -55,8 +60,18 @@ class AppController:
             'name': 'GeoNorge API Data'
         })
         
+        self.data_model.register_source('hjertestarterregister', {
+            'type': 'api',
+            'name': 'AED Locations (Hjertestarterregister)'
+        })
+
+        self.data_model.register_source('supabase-places', {
+            'type': 'supabase',
+            'name': 'Supabase Places'
+        })
+        
         self.map_model.add_layer('geojson-local', {
-            'name': 'Local GeoJSON Data',
+            'name': 'Local Files',
             'color': '#3388ff',
             'visible': True
         })
@@ -66,106 +81,65 @@ class AppController:
             'color': '#ff8c00',
             'visible': False
         })
+        
+        self.map_model.add_layer('hjertestarterregister', {
+            'name': 'AED Locations',
+            'color': '#ff1744',  # Red for AEDs
+            'visible': True
+        })
+
+        self.map_model.add_layer('supabase-places', {
+            'name': 'Supabase Data',
+            'color': '#009688',  # Teal for Supabase
+            'visible': True
+        })
 
     def load_embedded_data(self):
-        """Load embedded Norwegian landmarks GeoJSON data"""
-        self.geojson_data = {
-            "type": "FeatureCollection",
-            "features": [
-                {
-                    "type": "Feature",
-                    "properties": {
-                        "name": "Oslo City Hall",
-                        "city": "Oslo",
-                        "type": "Government Building",
-                        "year_built": 1950,
-                        "population": 634293
-                    },
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [10.7339, 59.9139]
+        """Load data from local file and Supabase"""
+        # 1. Load local GeoJSON
+        try:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            file_path = os.path.join(base_dir, 'data', 'norwegian_landmarks.geojson')
+            
+            with open(file_path, 'r', encoding='utf-8') as f:
+                self.geojson_data = json.load(f)
+            
+            self.data_model.store_data('geojson-local', self.geojson_data)
+            self.map_model.set_layer_features('geojson-local', self.geojson_data['features'])
+            print(f"✓ Loaded {len(self.geojson_data.get('features', []))} features from local file")
+            
+        except Exception as e:
+            print(f"Error loading local GeoJSON: {e}")
+
+        # 2. Load from Supabase
+        if self.data_model.supabase_client:
+            print("Fetching data from Supabase...")
+            places = self.data_model.get_all_locations('places')
+            
+            if places:
+                # Convert Supabase records to GeoJSON features
+                supabase_features = []
+                for place in places:
+                    feature = {
+                        "type": "Feature",
+                        "properties": {
+                            "name": place.get('name'),
+                            "description": place.get('description'),
+                            "city": place.get('city'),
+                            "category": place.get('category'),
+                            "source": "Supabase"
+                        },
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [place.get('longitude'), place.get('latitude')]
+                        }
                     }
-                },
-                {
-                    "type": "Feature",
-                    "properties": {
-                        "name": "Bergen Harbor",
-                        "city": "Bergen",
-                        "type": "Port",
-                        "year_built": 1200,
-                        "population": 285900
-                    },
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [5.3221, 60.3913]
-                    }
-                },
-                {
-                    "type": "Feature",
-                    "properties": {
-                        "name": "Stavanger Cathedral",
-                        "city": "Stavanger",
-                        "type": "Religious Building",
-                        "year_built": 1125,
-                        "population": 144652
-                    },
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [5.7331, 58.9699]
-                    }
-                },
-                {
-                    "type": "Feature",
-                    "properties": {
-                        "name": "Nidaros Cathedral",
-                        "city": "Trondheim",
-                        "type": "Religious Building",
-                        "year_built": 1070,
-                        "population": 193559
-                    },
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [10.3951, 63.4269]
-                    }
-                },
-                {
-                    "type": "Feature",
-                    "properties": {
-                        "name": "Tromsø Arctic Cathedral",
-                        "city": "Tromsø",
-                        "type": "Religious Building",
-                        "year_built": 1965,
-                        "population": 77570
-                    },
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [18.9553, 69.6492]
-                    }
-                },
-                {
-                    "type": "Feature",
-                    "properties": {
-                        "name": "Northern Railway",
-                        "city": "Multiple",
-                        "type": "Infrastructure",
-                        "year_built": 1902,
-                        "length_km": 1147
-                    },
-                    "geometry": {
-                        "type": "LineString",
-                        "coordinates": [
-                            [10.7339, 59.9139],
-                            [11.0905, 60.5925],
-                            [10.3951, 63.4269],
-                            [18.9553, 69.6492]
-                        ]
-                    }
-                }
-            ]
-        }
-        
-        self.data_model.store_data('geojson-local', self.geojson_data)
-        self.map_model.set_layer_features('geojson-local', self.geojson_data['features'])
+                    supabase_features.append(feature)
+                
+                self.map_model.set_layer_features('supabase-places', supabase_features)
+                print(f"✓ Loaded {len(supabase_features)} places from Supabase")
+            else:
+                print("No data found in Supabase 'places' table")
 
     def render_layers(self):
         """Render all visible layers on the map"""
@@ -232,6 +206,32 @@ class AppController:
         except Exception as e:
             print(f"✗ Search error: {e}")
             return []
+
+    def load_aeds(self, latitude: float = None, longitude: float = None, 
+                  distance: int = 99999) -> bool:
+        """
+        Load AED data from Hjertestarterregister API
+        :param latitude: Center latitude (uses Norway center if None)
+        :param longitude: Center longitude (uses Norway center if None)
+        :param distance: Search distance in meters
+        :return: Success status
+        """
+        try:
+            geojson = self.data_model.fetch_hjertestarterregister(
+                latitude=latitude,
+                longitude=longitude,
+                distance=distance
+            )
+            
+            if geojson and geojson['features']:
+                self.map_model.set_layer_features('hjertestarterregister', 
+                                                  geojson['features'])
+                print(f"✓ Loaded {len(geojson['features'])} AEDs")
+                return True
+            return False
+        except Exception as e:
+            print(f"✗ Error loading AEDs: {e}")
+            return False
 
     def get_map_html(self) -> str:
         """Get map as HTML for rendering"""

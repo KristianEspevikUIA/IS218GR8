@@ -1,0 +1,121 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Oslo City Hall",
+                "city": "Oslo",
+                "type": "Government Building",
+                "year_built": 1950,
+                "population": 634293
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    10.7339,
+                    59.9139
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Bergen Harbor",
+                "city": "Bergen",
+                "type": "Port",
+                "year_built": 1200,
+                "population": 285900
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.3221,
+                    60.3913
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Stavanger Cathedral",
+                "city": "Stavanger",
+                "type": "Religious Building",
+                "year_built": 1125,
+                "population": 144652
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    5.7331,
+                    58.9699
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Nidaros Cathedral",
+                "city": "Trondheim",
+                "type": "Religious Building",
+                "year_built": 1070,
+                "population": 193559
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    10.3951,
+                    63.4269
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Tromsø Arctic Cathedral",
+                "city": "Tromsø",
+                "type": "Religious Building",
+                "year_built": 1965,
+                "population": 77570
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    18.9553,
+                    69.6492
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Northern Railway",
+                "city": "Multiple",
+                "type": "Infrastructure",
+                "year_built": 1902,
+                "length_km": 1147
+            },
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        10.7339,
+                        59.9139
+                    ],
+                    [
+                        11.0905,
+                        60.5925
+                    ],
+                    [
+                        10.3951,
+                        63.4269
+                    ],
+                    [
+                        18.9553,
+                        69.6492
+                    ]
+                ]
+            }
+        }
+    ]
+}
