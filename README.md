@@ -8,8 +8,7 @@
 Eit Python Flask nettkart som lastar geografiske data frå fleire kjelder (GeoJSON, OGC API-ar, PostGIS-databasar), visualiserer dei interaktivt med Folium, støttar romleg filtrering etter avstand ved bruk av Haversine-formelen, og skil konsekvent konsern med MVC-arkitektur.
 
 ### Video
-youtube.com/watch?fbclid=IwY2xjawQKZ9tleHRuA2FlbQIxMABicmlkETBCMUpacUpwbGNxNThQT080c3J0YwZhcHBfaWQQMjIyMDM5MTc4ODIwMDg5MgABHlAuOTZfgPcQhsh3fojHC80AO-W5TpYUrct4ijGq4OTVTiWbPN7q9nA1Vrk8_aem_mVo_iTSTPjiGW612Th5CVQ&v=_QZBDaFDaIY&feature=youtu.be 
-
+https://www.youtube.com/watch?v=_QZBDaFDaIY 
 ---
 
 ## Funksjonar
