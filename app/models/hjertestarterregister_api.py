@@ -5,7 +5,9 @@ Fetches AED (Automated External Defibrillator) locations from Hjertestarterregis
 import requests
 import os
 from typing import Dict, List, Optional, Tuple
+from datetime import datetime
 from dotenv import load_dotenv
+import math
 
 # Load environment variables from .env file
 load_dotenv()
@@ -20,6 +22,10 @@ class HjertestarterregisterAPI:
     BASE_URL = "https://hjertestarterregister.113.no/ords/api/v1"
     OAUTH_ENDPOINT = "https://hjertestarterregister.113.no/ords/api/oauth/token"
     
+    # Kristiansand city center coordinates
+    KRISTIANSAND_CENTER = {"latitude": 58.1414, "longitude": 8.0842}
+    DEFAULT_SEARCH_RADIUS = 15000  # 15 km in meters
+    
     def __init__(self, client_id: str = None, client_secret: str = None):
         """
         Initialize API client
@@ -31,6 +37,7 @@ class HjertestarterregisterAPI:
         self.client_secret = client_secret or os.getenv('HJERTESTARTERREGISTER_CLIENT_SECRET')
         self.access_token = None
         self.token_type = "bearer"
+        self.token_expires_at = None
         self.session = requests.Session()
     
     def set_credentials(self, client_id: str, client_secret: str):
@@ -64,13 +71,27 @@ class HjertestarterregisterAPI:
             result = response.json()
             self.access_token = result.get('access_token')
             self.token_type = result.get('token_type', 'bearer')
+            expires_in = result.get('expires_in', 3600)
+            self.token_expires_at = datetime.now().timestamp() + expires_in
             
-            print(f"✓ Authentication successful. Token expires in {result.get('expires_in', 3600)} seconds")
+            print(f"✓ Authentication successful. Token expires in {expires_in} seconds")
             return True
         
         except requests.exceptions.RequestException as e:
             print(f"✗ Authentication failed: {e}")
             return False
+    
+    def _token_expired(self) -> bool:
+        """Check if access token has expired"""
+        if not self.token_expires_at or not self.access_token:
+            return True
+        return datetime.now().timestamp() >= self.token_expires_at
+    
+    def _ensure_authenticated(self) -> bool:
+        """Ensure we have a valid token, re-authenticate if needed"""
+        if self._token_expired():
+            return self.authenticate()
+        return True
     
     def _get_headers(self) -> Dict:
         """Get request headers with authentication"""
@@ -79,10 +100,30 @@ class HjertestarterregisterAPI:
             headers["Authorization"] = f"{self.token_type} {self.access_token}"
         return headers
     
+    @staticmethod
+    def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """
+        Calculate distance between two points using Haversine formula
+        :return: Distance in meters
+        """
+        R = 6371000  # Earth radius in meters
+        
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        delta_phi = math.radians(lat2 - lat1)
+        delta_lambda = math.radians(lon2 - lon1)
+        
+        a = (math.sin(delta_phi / 2) ** 2 +
+             math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2)
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        
+        return R * c
+    
     def search_assets(self, 
                      latitude: float = None, 
                      longitude: float = None,
                      distance: int = None,
+                     date: str = None,
                      max_rows: int = 5000) -> Optional[Dict]:
         """
         Search for assets (AEDs) matching criteria
@@ -90,15 +131,29 @@ class HjertestarterregisterAPI:
         :param latitude: Latitude of search center
         :param longitude: Longitude of search center
         :param distance: Search distance in meters
+        :param date: Date in DD-Mon-YYYY format for opening hours evaluation
         :param max_rows: Maximum number of rows to return
         :return: API response as dictionary with ASSETS list
         """
+        # Ensure we have a valid token
+        if not self._ensure_authenticated():
+            return None
+        
         params = {'max_rows': max_rows}
         
-        if latitude is not None and longitude is not None and distance is not None:
+        if latitude is not None and longitude is not None:
             params['latitude'] = latitude
             params['longitude'] = longitude
+        
+        if distance is not None:
             params['distance'] = distance
+        
+        if date is None:
+            # Use today's date in DD-Mon-YYYY format
+            today = datetime.now()
+            date = today.strftime('%d-%b-%Y')
+        
+        params['date'] = date
         
         try:
             response = self.session.get(
@@ -107,12 +162,105 @@ class HjertestarterregisterAPI:
                 headers=self._get_headers(),
                 timeout=15
             )
+            
+            # Handle 401 Unauthorized - token may have expired
+            if response.status_code == 401:
+                print("⚠ Token expired, re-authenticating...")
+                if self.authenticate():
+                    # Retry the request with new token
+                    response = self.session.get(
+                        f"{self.BASE_URL}/assets/search/",
+                        params=params,
+                        headers=self._get_headers(),
+                        timeout=15
+                    )
+                else:
+                    print("✗ Re-authentication failed")
+                    return None
+            
             response.raise_for_status()
             return response.json()
         
         except requests.exceptions.RequestException as e:
             print(f"✗ Error searching assets: {e}")
             return None
+    
+    def search_available_aeds(self,
+                             latitude: float = None,
+                             longitude: float = None,
+                             distance: int = None) -> List[Dict]:
+        """
+        Search for ONLY available (open) AEDs in specified location
+        
+        :param latitude: Latitude of search center (default: Kristiansand)
+        :param longitude: Longitude of search center (default: Kristiansand)
+        :param distance: Search distance in meters (default: 15 km)
+        :return: List of available AEDs sorted by distance
+        """
+        # Use Kristiansand defaults if not provided
+        if latitude is None:
+            latitude = self.KRISTIANSAND_CENTER["latitude"]
+        if longitude is None:
+            longitude = self.KRISTIANSAND_CENTER["longitude"]
+        if distance is None:
+            distance = self.DEFAULT_SEARCH_RADIUS
+        
+        # Search for assets
+        response = self.search_assets(
+            latitude=latitude,
+            longitude=longitude,
+            distance=distance
+        )
+        
+        if not response or 'ASSETS' not in response:
+            return []
+        
+        # Filter to only OPEN and ACTIVE AEDs
+        available_aeds = []
+        
+        for asset in response['ASSETS']:
+            # Filter criteria:
+            # 1. Must be OPEN (IS_OPEN == "Y")
+            # 2. Must be ACTIVE (ACTIVE == "Y")
+            # 3. Must have location data
+            
+            if (asset.get('IS_OPEN') == 'Y' and
+                asset.get('ACTIVE') == 'Y' and
+                asset.get('SITE_LATITUDE') and
+                asset.get('SITE_LONGITUDE')):
+                
+                # Calculate distance from search center
+                dist_meters = self._haversine_distance(
+                    latitude,
+                    longitude,
+                    float(asset['SITE_LATITUDE']),
+                    float(asset['SITE_LONGITUDE'])
+                )
+                
+                # Prepare AED record with distance
+                aed_record = {
+                    'asset_id': asset.get('ASSET_ID'),
+                    'site_name': asset.get('SITE_NAME'),
+                    'site_address': asset.get('SITE_ADDRESS'),
+                    'site_post_code': asset.get('SITE_POST_CODE'),
+                    'site_post_area': asset.get('SITE_POST_AREA'),
+                    'opening_hours_text': asset.get('OPENING_HOURS_TEXT'),
+                    'site_latitude': float(asset.get('SITE_LATITUDE')),
+                    'site_longitude': float(asset.get('SITE_LONGITUDE')),
+                    'distance_meters': round(dist_meters, 0),
+                    'distance_km': round(dist_meters / 1000, 2),
+                    'site_description': asset.get('SITE_DESCRIPTION'),
+                    'site_access_info': asset.get('SITE_ACCESS_INFO'),
+                    'serial_number': asset.get('SERIAL_NUMBER'),
+                    'asset_status': asset.get('ASSET_STATUS'),
+                }
+                
+                available_aeds.append(aed_record)
+        
+        # Sort by distance (nearest first)
+        available_aeds.sort(key=lambda x: x['distance_meters'])
+        
+        return available_aeds
     
     def convert_to_geojson(self, api_response: Dict) -> Dict:
         """

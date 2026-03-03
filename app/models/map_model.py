@@ -6,8 +6,8 @@ from typing import Dict, List, Tuple, Optional
 
 class MapModel:
     def __init__(self):
-        self.map_center = [60.4518, 8.4689]  # Norway center
-        self.zoom_level = 5
+        self.map_center = [58.1414, 8.0842]  # Kristiansand, Agder
+        self.zoom_level = 10  # Zoomed to Agder region
         self.layers = {}
         self.spatial_bounds = None
         self.search_point = None

@@ -1,246 +1,200 @@
 """
 AppController.py - Main application controller
-Orchestrates initialization and overall application flow
+Orchestrates initialization and overall application flow.
+Now supports DYNAMIC data serving — no more frozen Folium HTML.
 """
 import json
 import os
+import hashlib
+from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 from app.models.map_model import MapModel
 from app.models.data_model import DataModel
-from app.views.map_view import MapView
+
+
+def _diag_features(label: str, features: list):
+    """Diagnostic: log count, first 5 IDs, and checksum"""
+    ids = []
+    for f in features:
+        props = f.get('properties', {})
+        fid = props.get('asset_id') or props.get('id') or props.get('name') or 'unknown'
+        ids.append(str(fid))
+    ids_sorted = sorted(ids)
+    checksum = hashlib.md5(','.join(ids_sorted).encode()).hexdigest()[:12]
+    ts = datetime.now().isoformat()
+    print(f"[{label}] ts={ts}  count={len(features)}  first5={ids_sorted[:5]}  cksum={checksum}")
 
 
 class AppController:
     def __init__(self):
         self.map_model = MapModel()
         self.data_model = DataModel()
-        self.map_view = None
         self.geojson_data = None
+        self._local_features = []
 
     def initialize(self):
-        """Initialize the application"""
+        """Initialize data sources (called once at startup)"""
         try:
-            # Setup data sources
+            print(f"\n{'='*60}")
+            print(f"[INIT] controller.initialize()  {datetime.now().isoformat()}")
+            print(f"{'='*60}")
+
             self.setup_data_sources()
-            
-            # Load embedded data
-            self.load_embedded_data()
-            
-            # Load AED data from API
-            print("\nLoading AED data from Hjertestarterregister...")
-            self.load_aeds()
-            
-            # Create map view
-            self.map_view = MapView(
-                center=self.map_model.map_center,
-                zoom_level=self.map_model.zoom_level
-            )
-            
-            # Add layers to map
-            self.render_layers()
-            
-            # Add layer control
-            self.map_view.add_layer_control()
-            
-            print("✓ Map initialized successfully!")
+            self._load_local_geojson()
+
+            print("✓ Controller initialized (data served dynamically per request)")
             return True
         except Exception as e:
             print(f"✗ Initialization error: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
+    # ─── data source registration ────────────────────────────
     def setup_data_sources(self):
-        """Register all data sources"""
         self.data_model.register_source('geojson-local', {
-            'type': 'geojson',
-            'name': 'Local GeoJSON Data'
+            'type': 'geojson', 'name': 'Local GeoJSON Data'
         })
-        
         self.data_model.register_source('ogc-api', {
-            'type': 'ogc_api',
-            'name': 'GeoNorge API Data'
+            'type': 'ogc_api', 'name': 'GeoNorge API Data'
         })
-        
         self.data_model.register_source('hjertestarterregister', {
-            'type': 'api',
-            'name': 'AED Locations (Hjertestarterregister)'
+            'type': 'api', 'name': 'AED Locations (Hjertestarterregister)'
         })
-
         self.data_model.register_source('supabase-places', {
-            'type': 'supabase',
-            'name': 'Supabase Places'
-        })
-        
-        self.map_model.add_layer('geojson-local', {
-            'name': 'Local Files',
-            'color': '#3388ff',
-            'visible': True
-        })
-        
-        self.map_model.add_layer('ogc-api', {
-            'name': 'GeoNorge API Data',
-            'color': '#ff8c00',
-            'visible': False
-        })
-        
-        self.map_model.add_layer('hjertestarterregister', {
-            'name': 'AED Locations',
-            'color': '#ff1744',  # Red for AEDs
-            'visible': True
+            'type': 'supabase', 'name': 'Supabase Places'
         })
 
-        self.map_model.add_layer('supabase-places', {
-            'name': 'Supabase Data',
-            'color': '#009688',  # Teal for Supabase
-            'visible': True
-        })
+        for lid, cfg in [
+            ('geojson-local', {'name': 'Local Files', 'color': '#3388ff', 'visible': True}),
+            ('ogc-api', {'name': 'GeoNorge API Data', 'color': '#ff8c00', 'visible': False}),
+            ('hjertestarterregister', {'name': 'AED Locations', 'color': '#ff1744', 'visible': True}),
+            ('supabase-places', {'name': 'Supabase Data', 'color': '#009688', 'visible': True}),
+        ]:
+            self.map_model.add_layer(lid, cfg)
 
-    def load_embedded_data(self):
-        """Load data from local file and Supabase"""
-        # 1. Load local GeoJSON
+    # ─── local geojson (static, loaded once) ─────────────────
+    def _load_local_geojson(self):
         try:
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             file_path = os.path.join(base_dir, 'data', 'norwegian_landmarks.geojson')
-            
             with open(file_path, 'r', encoding='utf-8') as f:
                 self.geojson_data = json.load(f)
-            
+            self._local_features = self.geojson_data.get('features', [])
             self.data_model.store_data('geojson-local', self.geojson_data)
-            self.map_model.set_layer_features('geojson-local', self.geojson_data['features'])
-            print(f"✓ Loaded {len(self.geojson_data.get('features', []))} features from local file")
-            
+            print(f"✓ Loaded {len(self._local_features)} features from local GeoJSON")
         except Exception as e:
-            print(f"Error loading local GeoJSON: {e}")
+            print(f"✗ Error loading local GeoJSON: {e}")
+            self._local_features = []
 
-        # 2. Load from Supabase
-        if self.data_model.supabase_client:
-            print("Fetching data from Supabase...")
-            places = self.data_model.get_all_locations('places')
-            
-            if places:
-                # Convert Supabase records to GeoJSON features
-                supabase_features = []
-                for place in places:
-                    feature = {
-                        "type": "Feature",
-                        "properties": {
-                            "name": place.get('name'),
-                            "description": place.get('description'),
-                            "city": place.get('city'),
-                            "category": place.get('category'),
-                            "source": "Supabase"
-                        },
-                        "geometry": {
-                            "type": "Point",
-                            "coordinates": [place.get('longitude'), place.get('latitude')]
-                        }
+    # ═══════════════════════════════════════════════════════════
+    #  Dynamic data getters (called per request — always fresh)
+    # ═══════════════════════════════════════════════════════════
+    def get_all_layers_geojson(self) -> Dict:
+        """
+        Return ALL map layers as a dict of GeoJSON FeatureCollections.
+        Called on every page load → always fresh data.
+        """
+        ts = datetime.now().isoformat()
+        print(f"\n[DYNAMIC] get_all_layers_geojson() at {ts}")
+
+        layers = {}
+
+        # 1. Local GeoJSON (cached in memory)
+        layers['landmarks'] = {
+            "type": "FeatureCollection",
+            "features": self._local_features
+        }
+
+        # 2. AEDs — prefer Supabase hjertestartere, fallback to live API
+        aed_geojson = self.data_model.get_hjertestartere_geojson()
+        if len(aed_geojson.get('features', [])) == 0:
+            print("[DYNAMIC] hjertestartere table empty/missing — falling back to live API")
+            aed_geojson = self._fetch_aeds_from_api()
+        layers['aeds'] = aed_geojson
+
+        # 3. Supabase places
+        places = self.data_model.get_all_locations('places')
+        place_features = []
+        for p in places:
+            if p.get('latitude') and p.get('longitude'):
+                place_features.append({
+                    "type": "Feature",
+                    "geometry": {"type": "Point",
+                                 "coordinates": [p['longitude'], p['latitude']]},
+                    "properties": {
+                        "name": p.get('name', ''),
+                        "description": p.get('description', ''),
+                        "city": p.get('city', ''),
+                        "category": p.get('category', ''),
+                        "source": "supabase/places"
                     }
-                    supabase_features.append(feature)
-                
-                self.map_model.set_layer_features('supabase-places', supabase_features)
-                print(f"✓ Loaded {len(supabase_features)} places from Supabase")
-            else:
-                print("No data found in Supabase 'places' table")
+                })
+        layers['places'] = {
+            "type": "FeatureCollection",
+            "features": place_features
+        }
 
-    def render_layers(self):
-        """Render all visible layers on the map"""
-        for layer in self.map_model.get_visible_layers():
-            features = layer.get('features', [])
-            if features:
-                self.map_view.add_geojson_layer(
-                    layer_id=layer['name'],
-                    features=features,
-                    color=layer.get('color', '#3388ff')
-                )
+        # Diagnostic
+        total = sum(len(l.get('features', [])) for l in layers.values())
+        print(f"[DYNAMIC] total features across all layers = {total}")
+        for name, fc in layers.items():
+            _diag_features(f"DYNAMIC-layer-{name}", fc.get('features', []))
 
-    def fetch_ogc_api(self, url: str, params: Dict = None) -> bool:
-        """
-        Fetch and display OGC API data
-        :param url: OGC API endpoint
-        :param params: Query parameters
-        :return: Success status
-        """
+        return layers
+
+    # ─── Keep backward-compat methods ────────────────────────
+    def _fetch_aeds_from_api(self) -> Dict:
+        """Fallback: fetch AEDs directly from Hjertestarterregister API"""
         try:
-            print(f"Fetching OGC API from {url}...")
-            data = self.data_model.fetch_ogc_api(url, params)
-            
-            # Handle GeoJSON response
-            if isinstance(data, dict) and 'features' in data:
-                self.map_model.set_layer_features('ogc-api', data.get('features', []))
-                self.map_model.toggle_layer('ogc-api')
-                print(f"✓ Loaded {len(data['features'])} features from OGC API")
-                return True
-            else:
-                print("✗ Invalid GeoJSON response from OGC API")
-                return False
+            from app.models.hjertestarterregister_api import HjertestarterregisterAPI
+            api = HjertestarterregisterAPI()
+            if api.client_id and api.client_secret:
+                api.authenticate()
+            response = api.search_assets(
+                latitude=58.1414, longitude=8.0842, distance=15000, max_rows=5000
+            )
+            if response and 'ASSETS' in response:
+                geojson = api.convert_to_geojson(response)
+                # Enhance with is_available
+                for feature in geojson['features']:
+                    for asset in response['ASSETS']:
+                        if asset.get('ASSET_ID') == feature['properties'].get('asset_id'):
+                            feature['properties']['is_available'] = asset.get('IS_OPEN') == 'Y'
+                            feature['properties']['is_open_status'] = asset.get('IS_OPEN', 'N')
+                            break
+                _diag_features("DYNAMIC-AED-API-FALLBACK", geojson['features'])
+                return geojson
         except Exception as e:
-            print(f"✗ Error fetching OGC API: {e}")
-            return False
+            print(f"✗ API fallback failed: {e}")
+        return {"type": "FeatureCollection", "features": []}
 
     def perform_spatial_search(self, radius_km: float) -> List[Dict]:
-        """
-        Perform spatial search within radius
-        :param radius_km: Search radius in kilometers
-        :return: Filtered features
-        """
         search_point = self.map_model.get_search_point()
         if not search_point:
-            print("✗ No search point set. Click on map to set center.")
             return []
-        
-        try:
-            features = self.geojson_data.get('features', [])
-            filtered = self.data_model.filter_by_distance(features, search_point, radius_km)
-            
-            print(f"✓ Found {len(filtered)} features within {radius_km}km")
-            
-            # Add search results to map
-            if filtered:
-                self.map_view.draw_search_radius(search_point, radius_km)
-                self.map_view.add_geojson_layer(
-                    layer_id='search-results',
-                    features=filtered,
-                    color='#ff6b6b'
-                )
-            
-            return filtered
-        except Exception as e:
-            print(f"✗ Search error: {e}")
-            return []
+        features = self._local_features
+        return self.data_model.filter_by_distance(features, search_point, radius_km)
 
-    def load_aeds(self, latitude: float = None, longitude: float = None, 
-                  distance: int = 99999) -> bool:
-        """
-        Load AED data from Hjertestarterregister API
-        :param latitude: Center latitude (uses Norway center if None)
-        :param longitude: Center longitude (uses Norway center if None)
-        :param distance: Search distance in meters
-        :return: Success status
-        """
+    def fetch_ogc_api(self, url: str, params: Dict = None) -> bool:
         try:
-            geojson = self.data_model.fetch_hjertestarterregister(
-                latitude=latitude,
-                longitude=longitude,
-                distance=distance
-            )
-            
-            if geojson and geojson['features']:
-                self.map_model.set_layer_features('hjertestarterregister', 
-                                                  geojson['features'])
-                print(f"✓ Loaded {len(geojson['features'])} AEDs")
+            data = self.data_model.fetch_ogc_api(url, params)
+            if isinstance(data, dict) and 'features' in data:
+                self.map_model.set_layer_features('ogc-api', data.get('features', []))
                 return True
             return False
-        except Exception as e:
-            print(f"✗ Error loading AEDs: {e}")
+        except Exception:
             return False
 
-    def get_map_html(self) -> str:
-        """Get map as HTML for rendering"""
-        if self.map_view:
-            return self.map_view.get_html()
-        return "<p>Map not initialized</p>"
+    def get_available_aeds(self, latitude=None, longitude=None, distance=None) -> dict:
+        try:
+            aeds = self.data_model.get_available_aeds(
+                latitude=latitude, longitude=longitude, distance=distance
+            )
+            return {'count': len(aeds), 'aeds': aeds}
+        except Exception as e:
+            print(f"✗ Error fetching available AEDs: {e}")
+            return {'count': 0, 'aeds': []}
 
     def save_map(self, filepath: str):
-        """Save map to HTML file"""
-        if self.map_view:
-            self.map_view.save(filepath)
-            print(f"✓ Map saved to {filepath}")
+        print(f"⚠ save_map() no longer applicable with dynamic Leaflet.js frontend")
