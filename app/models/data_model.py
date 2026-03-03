@@ -228,6 +228,37 @@ class DataModel:
         """
         return self.query_supabase(table_name)
     
+    def get_available_aeds(self, latitude: float = None, longitude: float = None, 
+                          distance: int = None) -> List[Dict]:
+        """
+        Fetch only available (open) AEDs from Hjertestarterregister API
+        :param latitude: Center latitude (uses Kristiansand if None)
+        :param longitude: Center longitude (uses Kristiansand if None)
+        :param distance: Search distance in meters (uses 15 km if None)
+        :return: List of available AEDs sorted by distance
+        """
+        from app.models.hjertestarterregister_api import HjertestarterregisterAPI
+        
+        try:
+            api = HjertestarterregisterAPI()
+            
+            # Try to authenticate if credentials are available
+            if api.client_id and api.client_secret:
+                api.authenticate()
+            
+            # Fetch available AEDs
+            available_aeds = api.search_available_aeds(
+                latitude=latitude,
+                longitude=longitude,
+                distance=distance
+            )
+            
+            return available_aeds
+        
+        except Exception as e:
+            print(f"✗ Error fetching available AEDs: {e}")
+            return []
+    
     def get_location_by_id(self, location_id: int, table_name: str = 'places') -> Optional[Dict]:
         """
         Fetch a specific location by ID

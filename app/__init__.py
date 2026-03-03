@@ -348,5 +348,109 @@ def get_places_by_category(category):
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
 
+# ==================== HJERTESTARTERREGISTER API ENDPOINTS ====================
+
+@app.route('/api/aeds/available', methods=['GET'])
+def get_available_aeds():
+    """
+    Get list of ONLY available (open) AEDs in Kristiansand/Agder
+    Optional query parameters:
+      - latitude: Center latitude (default: Kristiansand 58.1414)
+      - longitude: Center longitude (default: Kristiansand 8.0842)
+      - distance: Search distance in meters (default: 15000 meters = 15 km)
+    Returns list of available AEDs sorted by nearest first
+    """
+    try:
+        # Get query parameters
+        latitude = request.args.get('latitude', type=float)
+        longitude = request.args.get('longitude', type=float)
+        distance = request.args.get('distance', type=int)
+        
+        # Fetch available AEDs
+        available_aeds = controller.data_model.get_available_aeds(
+            latitude=latitude,
+            longitude=longitude,
+            distance=distance
+        )
+        
+        # Determine search center and radius for response
+        if latitude is None:
+            latitude = 58.1414  # Kristiansand
+        if longitude is None:
+            longitude = 8.0842  # Kristiansand
+        if distance is None:
+            distance = 15000  # 15 km
+        
+        if available_aeds:
+            return jsonify({
+                'status': 'success',
+                'count': len(available_aeds),
+                'search_center': {
+                    'latitude': latitude,
+                    'longitude': longitude,
+                    'name': 'Kristiansand' if (latitude == 58.1414 and longitude == 8.0842) else 'Custom location'
+                },
+                'search_radius_meters': distance,
+                'search_radius_km': distance / 1000,
+                'data': available_aeds
+            })
+        else:
+            return jsonify({
+                'status': 'success',
+                'count': 0,
+                'message': f'No available AEDs found in {distance / 1000:.1f} km radius',
+                'search_center': {
+                    'latitude': latitude,
+                    'longitude': longitude,
+                    'name': 'Kristiansand' if (latitude == 58.1414 and longitude == 8.0842) else 'Custom location'
+                },
+                'search_radius_meters': distance,
+                'search_radius_km': distance / 1000,
+                'data': []
+            })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+
+@app.route('/api/aeds/available/count', methods=['GET'])
+def get_available_aeds_count():
+    """
+    Get count of available AEDs in Kristiansand/Agder
+    Optional query parameters:
+      - latitude: Center latitude (default: Kristiansand)
+      - longitude: Center longitude (default: Kristiansand)
+      - distance: Search distance in meters (default: 15 km)
+    """
+    try:
+        latitude = request.args.get('latitude', type=float)
+        longitude = request.args.get('longitude', type=float)
+        distance = request.args.get('distance', type=int)
+        
+        available_aeds = controller.data_model.get_available_aeds(
+            latitude=latitude,
+            longitude=longitude,
+            distance=distance
+        )
+        
+        if latitude is None:
+            latitude = 58.1414
+        if longitude is None:
+            longitude = 8.0842
+        if distance is None:
+            distance = 15000
+        
+        return jsonify({
+            'status': 'success',
+            'count': len(available_aeds),
+            'search_center': {
+                'latitude': latitude,
+                'longitude': longitude
+            },
+            'search_radius_km': distance / 1000
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

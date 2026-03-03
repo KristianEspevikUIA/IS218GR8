@@ -208,30 +208,97 @@ class AppController:
             return []
 
     def load_aeds(self, latitude: float = None, longitude: float = None, 
-                  distance: int = 99999) -> bool:
+                  distance: int = 80000) -> bool:
         """
-        Load AED data from Hjertestarterregister API
-        :param latitude: Center latitude (uses Norway center if None)
-        :param longitude: Center longitude (uses Norway center if None)
-        :param distance: Search distance in meters
+        Load AED data from Agder region
+        :param latitude: Center latitude (uses Kristiansand if None)
+        :param longitude: Center longitude (uses Kristiansand if None)
+        :param distance: Search distance in meters (default: 80 km for Agder region)
         :return: Success status
         """
+        # Default to Kristiansand/Agder region if not specified
+        if latitude is None:
+            latitude = 58.1414  # Kristiansand
+        if longitude is None:
+            longitude = 8.0842  # Kristiansand
+        
         try:
-            geojson = self.data_model.fetch_hjertestarterregister(
+            # Load all AEDs in Agder region
+            from app.models.hjertestarterregister_api import HjertestarterregisterAPI
+            
+            api = HjertestarterregisterAPI()
+            
+            # Authenticate
+            print("Authenticating with Hjertestarterregister API...")
+            if not api.authenticate():
+                print("⚠ Could not authenticate, attempting public access...")
+            
+            print(f"\nFetching AEDs from Hjertestarterregister API...")
+            print(f"  Center: ({latitude}, {longitude})")
+            print(f"  Distance: {distance}m (Agder region)")
+            
+            # Search for assets
+            response = api.search_assets(
+                latitude=latitude,
+                longitude=longitude,
+                distance=distance,
+                max_rows=5000
+            )
+            
+            if response and 'ASSETS' in response:
+                # Convert to GeoJSON
+                geojson = api.convert_to_geojson(response)
+                
+                # Get available AEDs for marking
+                available_aeds = api.search_available_aeds(
+                    latitude=latitude,
+                    longitude=longitude,
+                    distance=distance
+                )
+                available_ids = {aed['asset_id'] for aed in available_aeds}
+                
+                # Mark available status on features
+                for feature in geojson['features']:
+                    asset_id = feature['properties'].get('asset_id')
+                    feature['properties']['is_available'] = asset_id in available_ids
+                
+                self.map_model.set_layer_features('hjertestarterregister', 
+                                                  geojson['features'])
+                print(f"✓ Loaded {geojson['metadata']['total_count']} AEDs in Agder region")
+                print(f"  ({len(available_ids)} currently available)")
+                return True
+            else:
+                print("✗ Failed to fetch AEDs from API or empty response")
+                return False
+        except Exception as e:
+            print(f"✗ Error loading AEDs: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
+    def get_available_aeds(self, latitude: float = None, longitude: float = None,
+                          distance: int = None) -> dict:
+        """
+        Get list of ONLY available (open) AEDs
+        :param latitude: Center latitude (uses Kristiansand if None)
+        :param longitude: Center longitude (uses Kristiansand if None)
+        :param distance: Search distance in meters (uses 15 km if None)
+        :return: Dictionary with count and list of available AEDs
+        """
+        try:
+            available_aeds = self.data_model.get_available_aeds(
                 latitude=latitude,
                 longitude=longitude,
                 distance=distance
             )
             
-            if geojson and geojson['features']:
-                self.map_model.set_layer_features('hjertestarterregister', 
-                                                  geojson['features'])
-                print(f"✓ Loaded {len(geojson['features'])} AEDs")
-                return True
-            return False
+            return {
+                'count': len(available_aeds),
+                'aeds': available_aeds
+            }
         except Exception as e:
-            print(f"✗ Error loading AEDs: {e}")
-            return False
+            print(f"✗ Error fetching available AEDs: {e}")
+            return {'count': 0, 'aeds': []}
 
     def get_map_html(self) -> str:
         """Get map as HTML for rendering"""
