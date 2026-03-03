@@ -1,12 +1,13 @@
 """
 DataModel.py - Handles geographic data fetching and spatial operations
-Supports GeoJSON, OGC APIs, and PostGIS/Supabase via REST API (httpx)
+Supports GeoJSON, OGC APIs (WFS), and PostGIS/Supabase via REST API (httpx)
 """
 import requests
 import json
 import os
 import hashlib
 import httpx
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 from geopy.distance import geodesic
@@ -301,3 +302,138 @@ class DataModel:
 
     def get_data(self, name: str) -> Optional[Dict]:
         return self.loaded_data.get(name)
+
+    # ═══════════════════════════════════════════════════════════
+    #  OGC WFS — Brannstasjoner (GeoNorge)
+    # ═══════════════════════════════════════════════════════════
+    def fetch_brannstasjoner_wfs(self, bbox: str = '7.5,58.0,8.5,58.5,EPSG:4326',
+                                  max_features: int = 100) -> Dict:
+        """
+        Fetch fire stations from GeoNorge WFS (OGC standard).
+        Returns GeoJSON FeatureCollection parsed from GML 3.2.
+        """
+        wfs_url = 'https://wfs.geonorge.no/skwms1/wfs.brannstasjoner'
+        params = {
+            'service': 'WFS',
+            'version': '2.0.0',
+            'request': 'GetFeature',
+            'typeNames': 'Brannstasjon',
+            'BBOX': bbox,
+            'count': str(max_features),
+        }
+        try:
+            print(f"[WFS] Fetching brannstasjoner from {wfs_url} (BBOX={bbox})")
+            r = requests.get(wfs_url, params=params, timeout=15)
+            r.raise_for_status()
+            features = self._parse_brannstasjoner_gml(r.text)
+            print(f"[WFS] ✓ Parsed {len(features)} brannstasjoner from GML")
+            return {"type": "FeatureCollection", "features": features}
+        except Exception as e:
+            print(f"[WFS] ✗ Error fetching brannstasjoner: {e}")
+            return {"type": "FeatureCollection", "features": []}
+
+    def _parse_brannstasjoner_gml(self, gml_text: str) -> List[Dict]:
+        """Parse GML 3.2 response from GeoNorge WFS into GeoJSON features"""
+        ns = {
+            'wfs': 'http://www.opengis.net/wfs/2.0',
+            'gml': 'http://www.opengis.net/gml/3.2',
+            'app': 'http://skjema.geonorge.no/SOSI/produktspesifikasjon/Brannstasjoner/20230101',
+        }
+        features = []
+        try:
+            root = ET.fromstring(gml_text)
+            members = root.findall('.//wfs:member', ns)
+            if not members:
+                # Try alternative namespace pattern
+                members = root.findall('.//{http://www.opengis.net/wfs/2.0}member')
+
+            for member in members:
+                feature = self._parse_single_brannstasjon(member, ns)
+                if feature:
+                    features.append(feature)
+        except ET.ParseError as e:
+            print(f"[WFS] XML parse error: {e}")
+        return features
+
+    def _parse_single_brannstasjon(self, member, ns: dict) -> Optional[Dict]:
+        """Parse a single brannstasjon GML member into a GeoJSON Feature"""
+        try:
+            # Find the brannstasjon element (try with namespace, then without)
+            elem = member.find('.//app:Brannstasjon', ns)
+            if elem is None:
+                # Try finding any element with relevant tags
+                for child in member.iter():
+                    tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+                    if tag == 'Brannstasjon':
+                        elem = child
+                        break
+            if elem is None:
+                return None
+
+            # Extract properties
+            props = {}
+            for tag_name, prop_key in [
+                ('brannstasjon', 'brannstasjon'),
+                ('brannvesen', 'brannvesen'),
+                ('stasjonstype', 'stasjonstype'),
+                ('kasernert', 'kasernert'),
+                ('kommunenummer', 'kommunenummer'),
+            ]:
+                el = elem.find(f'app:{tag_name}', ns)
+                if el is None:
+                    # Try without namespace
+                    for child in elem.iter():
+                        ctag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+                        if ctag == tag_name:
+                            el = child
+                            break
+                props[prop_key] = el.text.strip() if el is not None and el.text else ''
+
+            props['source'] = 'GeoNorge WFS (OGC)'
+
+            # Extract coordinates from gml:pos
+            pos_el = None
+            for p in member.iter():
+                tag = p.tag.split('}')[-1] if '}' in p.tag else p.tag
+                if tag == 'pos' and p.text:
+                    pos_el = p
+                    break
+
+            if pos_el is None or not pos_el.text:
+                return None
+
+            # GML pos format from GeoNorge EPSG:4326: "lat lng" (northing easting)
+            parts = pos_el.text.strip().split()
+            if len(parts) < 2:
+                return None
+
+            lat = float(parts[0])
+            lng = float(parts[1])
+
+            # Sanity check — if lat > 90 it's actually lng-first
+            if abs(lat) > 90 and abs(lng) <= 90:
+                lat, lng = lng, lat
+
+            return {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [lng, lat]},
+                "properties": props
+            }
+        except Exception as e:
+            print(f"[WFS] Error parsing member: {e}")
+            return None
+
+    # ═══════════════════════════════════════════════════════════
+    #  PostGIS spatial — Nearby hjertestartere (RPC)
+    # ═══════════════════════════════════════════════════════════
+    def nearby_hjertestartere(self, latitude: float, longitude: float,
+                               radius_km: float = 5.0) -> List[Dict]:
+        """
+        Find AEDs near a point using PostGIS ST_DWithin (server-side spatial query).
+        Requires the nearby_hjertestartere function in Supabase.
+        """
+        return self.sb.rpc('nearby_hjertestartere', {
+            'center_lat': latitude,
+            'center_lng': longitude,
+            'radius_km': radius_km
+        })

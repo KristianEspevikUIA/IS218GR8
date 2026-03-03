@@ -32,14 +32,16 @@ def initialize_app():
 def index():
     """Render main map page (Leaflet.js loads data dynamically via /api/map/layers)"""
     data_catalog = [
-        {'dataset': 'AED Locations (Hjertestarterregister)',
-         'source': 'Supabase (synced from API)'},
-        {'dataset': 'Norwegian Cities & Landmarks',
-         'source': 'Local GeoJSON'},
-        {'dataset': 'Supabase Places',
-         'source': 'Supabase PostGIS'},
-        {'dataset': 'OpenStreetMap Basemap',
-         'source': 'CDN Tiles'},
+        {'dataset': 'AED-hjertestartarar (263 stk)',
+         'source': 'Hjertestarterregister API (OAuth 2.0)'},
+        {'dataset': 'Brannstasjonar (OGC WFS)',
+         'source': 'GeoNorge WFS'},
+        {'dataset': 'Beredskapsressursar',
+         'source': 'Lokal GeoJSON'},
+        {'dataset': 'Supabase-stader (PostGIS)',
+         'source': 'Supabase REST'},
+        {'dataset': 'Bakgrunnskart',
+         'source': 'OpenStreetMap CDN'},
     ]
     return render_template('index.html', data_catalog=data_catalog)
 
@@ -103,6 +105,29 @@ def get_data_sources():
             'visible': layer.get('visible', True),
         })
     return jsonify(sources)
+
+
+# ==================== POSTGIS SPATIAL ENDPOINTS ====================
+
+@app.route('/api/postgis/nearby-aeds', methods=['POST'])
+def get_nearby_aeds_postgis():
+    """Find AEDs near a point using PostGIS ST_DWithin (server-side spatial query)"""
+    try:
+        data = request.get_json()
+        lat = float(data.get('latitude'))
+        lng = float(data.get('longitude'))
+        r = float(data.get('radius_km', 5))
+        results = controller.data_model.nearby_hjertestartere(lat, lng, r)
+        return jsonify({
+            'status': 'success',
+            'count': len(results),
+            'search_point': {'latitude': lat, 'longitude': lng},
+            'radius_km': r,
+            'engine': 'PostGIS ST_DWithin',
+            'data': results
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
 
 
 # ==================== SUPABASE PLACES API ====================

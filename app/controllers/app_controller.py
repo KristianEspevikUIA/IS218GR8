@@ -53,10 +53,10 @@ class AppController:
     # ─── data source registration ────────────────────────────
     def setup_data_sources(self):
         self.data_model.register_source('geojson-local', {
-            'type': 'geojson', 'name': 'Local GeoJSON Data'
+            'type': 'geojson', 'name': 'Beredskapsressursar (lokal GeoJSON)'
         })
-        self.data_model.register_source('ogc-api', {
-            'type': 'ogc_api', 'name': 'GeoNorge API Data'
+        self.data_model.register_source('ogc-wfs', {
+            'type': 'ogc_wfs', 'name': 'Brannstasjoner (GeoNorge WFS)'
         })
         self.data_model.register_source('hjertestarterregister', {
             'type': 'api', 'name': 'AED Locations (Hjertestarterregister)'
@@ -66,8 +66,8 @@ class AppController:
         })
 
         for lid, cfg in [
-            ('geojson-local', {'name': 'Local Files', 'color': '#3388ff', 'visible': True}),
-            ('ogc-api', {'name': 'GeoNorge API Data', 'color': '#ff8c00', 'visible': False}),
+            ('geojson-local', {'name': 'Beredskapsressursar', 'color': '#3388ff', 'visible': True}),
+            ('ogc-wfs', {'name': 'Brannstasjoner (WFS)', 'color': '#ff8c00', 'visible': True}),
             ('hjertestarterregister', {'name': 'AED Locations', 'color': '#ff1744', 'visible': True}),
             ('supabase-places', {'name': 'Supabase Data', 'color': '#009688', 'visible': True}),
         ]:
@@ -100,13 +100,21 @@ class AppController:
 
         layers = {}
 
-        # 1. Local GeoJSON (cached in memory)
-        layers['landmarks'] = {
+        # 1. Local GeoJSON — beredskapsressursar (cached in memory)
+        layers['beredskap'] = {
             "type": "FeatureCollection",
             "features": self._local_features
         }
 
-        # 2. AEDs — prefer Supabase hjertestartere, fallback to live API
+        # 2. Brannstasjoner — OGC WFS from GeoNorge (live per request)
+        try:
+            brann_geojson = self.data_model.fetch_brannstasjoner_wfs()
+            layers['brannstasjoner'] = brann_geojson
+        except Exception as e:
+            print(f"[DYNAMIC] ✗ brannstasjoner WFS failed: {e}")
+            layers['brannstasjoner'] = {"type": "FeatureCollection", "features": []}
+
+        # 3. AEDs — prefer Supabase hjertestartere, fallback to live API
         aed_geojson = self.data_model.get_hjertestartere_geojson()
         if len(aed_geojson.get('features', [])) == 0:
             print("[DYNAMIC] hjertestartere table empty/missing — falling back to live API")
