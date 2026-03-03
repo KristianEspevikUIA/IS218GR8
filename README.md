@@ -142,8 +142,6 @@ IS218GR8/
 │   │   ├── data_model.py        # Supabase REST-klient (httpx)
 │   │   ├── map_model.py         # Karttilstand og lag
 │   │   └── hjertestarterregister_api.py  # AED API-klient (OAuth)
-│   ├── views/
-│   │   └── map_view.py          # (Legacy Folium — ikkje i bruk)
 │   └── data/
 │       └── norwegian_landmarks.geojson
 ├── templates/
