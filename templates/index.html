@@ -3,193 +3,104 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Web Map - Python Flask + MVC</title>
+    <title>Interactive Web Map - AED Kristiansand</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f5f5f5;
-            color: #333;
+            background: #f5f5f5; color: #333;
         }
-
-        #app {
-            display: flex;
-            height: 100vh;
-            gap: 10px;
-            padding: 10px;
-        }
-
+        #app { display: flex; height: 100vh; gap: 10px; padding: 10px; }
         #map {
-            flex: 1;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            flex: 1; border-radius: 8px; z-index: 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,.15);
         }
-
         #controls {
-            width: 300px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-            overflow-y: auto;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
+            width: 310px; background: #fff; border-radius: 8px; overflow-y: auto;
+            padding: 15px; display: flex; flex-direction: column; gap: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.15);
         }
-
-        .search-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .search-panel label {
-            font-size: 12px;
-            font-weight: 600;
-            color: #2c3e50;
-        }
-
+        .search-panel { display: flex; flex-direction: column; gap: 10px; }
+        .search-panel label { font-size: 12px; font-weight: 600; color: #2c3e50; }
         .search-panel input {
-            padding: 8px 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
+            padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;
         }
-
-        .search-panel button {
-            padding: 10px 15px;
-            background-color: #3388ff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: background-color 0.2s;
+        .btn {
+            padding: 10px 15px; color: #fff; border: none; border-radius: 4px;
+            cursor: pointer; font-size: 14px; font-weight: 600; transition: .2s;
         }
-
-        .search-panel button:hover {
-            background-color: #0056b3;
+        .btn-blue { background: #3388ff; }
+        .btn-blue:hover { background: #0056b3; }
+        .btn-green { background: #27ae60; }
+        .btn-green:hover { background: #1e8449; }
+        .data-catalog { margin-top: 10px; }
+        .data-catalog h3 { margin-bottom: 8px; color: #2c3e50; }
+        .catalog-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+        .catalog-table th, .catalog-table td {
+            border-bottom: 1px solid #ddd; padding: 8px; text-align: left;
         }
-
-        .data-catalog {
-            margin-top: 20px;
+        .catalog-table th { background: #ecf0f1; font-weight: 600; }
+        #status-bar {
+            font-size: 12px; color: #666; padding: 6px 0; border-top: 1px solid #eee;
         }
-
-        .data-catalog h3 {
-            margin-bottom: 10px;
-            color: #2c3e50;
-        }
-
-        .catalog-table {
-            width: 100%;
-            font-size: 12px;
-            border-collapse: collapse;
-        }
-
-        .catalog-table th,
-        .catalog-table td {
-            border-bottom: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-
-        .catalog-table th {
-            background-color: #ecf0f1;
-            font-weight: 600;
-        }
-
-        .loading {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 30px 50px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            z-index: 1000;
-            text-align: center;
-        }
-
+        .legend { font-size: 12px; }
+        .legend span { display: inline-block; width: 14px; height: 14px;
+            border-radius: 50%; margin-right: 5px; vertical-align: middle; }
         .toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 15px 20px;
-            border-radius: 4px;
-            color: white;
-            font-size: 14px;
-            animation: slideIn 0.3s ease-out;
-            z-index: 1001;
-            max-width: 300px;
+            position: fixed; bottom: 20px; right: 20px; padding: 12px 20px;
+            border-radius: 4px; color: #fff; font-size: 14px; z-index: 9999;
+            animation: slideIn .3s ease-out; max-width: 300px;
         }
-
-        .toast.success {
-            background-color: #27ae60;
-        }
-
-        .toast.error {
-            background-color: #e74c3c;
-        }
-
+        .toast.success { background: #27ae60; }
+        .toast.error { background: #e74c3c; }
+        .toast.info { background: #3388ff; }
         @keyframes slideIn {
-            from {
-                transform: translateX(400px);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
+            from { transform: translateX(400px); opacity: 0; }
+            to   { transform: translateX(0); opacity: 1; }
         }
-
         @media (max-width: 768px) {
-            #app {
-                flex-direction: column;
-            }
-            #controls {
-                width: 100%;
-                max-height: 30vh;
-            }
+            #app { flex-direction: column; }
+            #controls { width: 100%; max-height: 30vh; }
         }
     </style>
 </head>
 <body>
     <div id="app">
-        <div id="map">
-            {{ map_html|safe }}
-        </div>
+        <div id="map"></div>
         <div id="controls">
-            <div class="search-panel">
-                <h3>Spatial Search</h3>
-                <label for="search-radius">Search radius (km):</label>
-                <input type="number" id="search-radius" min="1" max="100" value="5">
-                <button onclick="performSearch()">Search by Distance</button>
-                <small style="color: #666;">Click on the map to set search center</small>
+            <h3>AED Kart - Kristiansand</h3>
+
+            <div class="legend">
+                <p><span style="background:#27ae60"></span> AED Åpen (IS_OPEN=Y)</p>
+                <p><span style="background:#e74c3c"></span> AED Stengt (IS_OPEN=N)</p>
+                <p><span style="background:#3388ff"></span> Landemerker (lokal)</p>
+                <p><span style="background:#009688"></span> Supabase steder</p>
             </div>
 
+            <div class="search-panel">
+                <h4>Spatial Search</h4>
+                <label for="search-radius">Søkeradius (km):</label>
+                <input type="number" id="search-radius" min="1" max="100" value="5">
+                <button class="btn btn-blue" onclick="performSearch()">Søk etter avstand</button>
+                <small style="color:#666">Klikk på kartet for å sette søkesenter</small>
+            </div>
+
+            <button class="btn btn-green" onclick="refreshData()">🔄 Oppdater data</button>
+
+            <div id="status-bar">Laster data…</div>
+
             <div class="data-catalog">
-                <h3>Data Catalog</h3>
+                <h4>Datakatalog</h4>
                 <table class="catalog-table">
-                    <thead>
-                        <tr>
-                            <th>Dataset</th>
-                            <th>Source</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Datasett</th><th>Kilde</th></tr></thead>
                     <tbody>
                         {% for item in data_catalog %}
-                        <tr>
-                            <td>{{ item.dataset }}</td>
-                            <td>{{ item.source }}</td>
-                        </tr>
+                        <tr><td>{{ item.dataset }}</td><td>{{ item.source }}</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -197,88 +108,213 @@
         </div>
     </div>
 
-    <div id="loading" class="loading">
-        <p>Loading...</p>
-    </div>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- MarkerCluster JS -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
     <script>
-        // Global variables
-        let map = null;
-        let searchPoint = null;
+    // ═══════════════════════════════════════════════════
+    //  Map init
+    // ═══════════════════════════════════════════════════
+    const map = L.map('map').setView([58.1414, 8.0842], 12);
 
-        // Initialize map interaction
-        function initMapInteraction() {
-            // Find the map container
-            const mapContainer = document.querySelector('[style*="position: relative"]');
-            if (mapContainer) {
-                mapContainer.addEventListener('click', function(e) {
-                    // This is a placeholder - real map interaction handled by Folium
-                    console.log('Map clicked');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(map);
+
+    // Layer groups (dynamically cleared + rebuilt)
+    let aedLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
+    let landmarkLayer = L.layerGroup();
+    let placesLayer   = L.layerGroup();
+    let searchCircle  = null;
+    let searchPoint   = null;
+
+    // Add to map + overlay control
+    aedLayer.addTo(map);
+    landmarkLayer.addTo(map);
+    placesLayer.addTo(map);
+
+    const overlays = {
+        "AED Hjertestartere": aedLayer,
+        "Landemerker":        landmarkLayer,
+        "Supabase steder":    placesLayer
+    };
+    L.control.layers(null, overlays).addTo(map);
+
+    // Click handler for search point
+    map.on('click', function(e) {
+        searchPoint = e.latlng;
+        showToast(`Søkesenter: ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`, 'info');
+    });
+
+    // ═══════════════════════════════════════════════════
+    //  Data loading (DYNAMIC — fetches fresh on each call)
+    // ═══════════════════════════════════════════════════
+    async function loadLayers() {
+        const statusBar = document.getElementById('status-bar');
+        statusBar.textContent = 'Henter data fra server…';
+
+        try {
+            const t0 = performance.now();
+            const resp = await fetch('/api/map/layers', { cache: 'no-store' });
+            const data = await resp.json();
+            const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+
+            // ── Clear old markers ──
+            aedLayer.clearLayers();
+            landmarkLayer.clearLayers();
+            placesLayer.clearLayers();
+
+            let aedCount = 0, openCount = 0, closedCount = 0;
+
+            // ── AEDs ──
+            if (data.aeds && data.aeds.features) {
+                data.aeds.features.forEach(f => {
+                    const p = f.properties;
+                    const [lng, lat] = f.geometry.coordinates;
+                    const isOpen = p.is_available;
+                    const color = isOpen ? '#27ae60' : '#e74c3c';
+                    const label = isOpen ? 'ÅPEN' : 'STENGT';
+
+                    const marker = L.circleMarker([lat, lng], {
+                        radius: 8, color: color, fillColor: color,
+                        fillOpacity: 0.7, weight: 2, opacity: 0.9
+                    });
+
+                    marker.bindPopup(
+                        `<b>${p.site_name || 'AED'}</b><br>
+                         ${p.site_address || ''}<br>
+                         ${p.site_post_area || ''}<br>
+                         <b style="color:${color}">${label}</b><br>
+                         ${p.opening_hours_text || ''}<br>
+                         <small>${p.distance_km ? p.distance_km + ' km fra sentrum' : ''}</small>`
+                    );
+                    marker.bindTooltip(`${p.site_name || 'AED'} (${label})`);
+                    aedLayer.addLayer(marker);
+
+                    aedCount++;
+                    if (isOpen) openCount++; else closedCount++;
                 });
             }
-        }
 
-        // Perform spatial search
-        function performSearch() {
-            const radius = document.getElementById('search-radius').value;
-            
-            if (!searchPoint) {
-                showToast('Please click on the map to set search center first', 'error');
-                return;
+            // ── Landmarks ──
+            let landmarkCount = 0;
+            if (data.landmarks && data.landmarks.features) {
+                data.landmarks.features.forEach(f => {
+                    const p = f.properties;
+                    const geom = f.geometry;
+
+                    if (geom.type === 'Point') {
+                        const [lng, lat] = geom.coordinates;
+                        const marker = L.circleMarker([lat, lng], {
+                            radius: 8, color: '#3388ff', fillColor: '#3388ff',
+                            fillOpacity: 0.7, weight: 2
+                        });
+                        marker.bindPopup(`<b>${p.name || ''}</b><br>${p.city || ''}<br>${p.type || ''}`);
+                        marker.bindTooltip(p.name || 'Landemerke');
+                        landmarkLayer.addLayer(marker);
+                        landmarkCount++;
+                    } else if (geom.type === 'LineString') {
+                        const coords = geom.coordinates.map(c => [c[1], c[0]]);
+                        const line = L.polyline(coords, { color: '#3388ff', weight: 4, opacity: 0.8 });
+                        line.bindPopup(`<b>${p.name || ''}</b><br>${p.description || ''}`);
+                        landmarkLayer.addLayer(line);
+                        landmarkCount++;
+                    }
+                });
             }
 
-            showLoading(true);
+            // ── Supabase places ──
+            let placeCount = 0;
+            if (data.places && data.places.features) {
+                data.places.features.forEach(f => {
+                    const p = f.properties;
+                    const [lng, lat] = f.geometry.coordinates;
+                    const marker = L.circleMarker([lat, lng], {
+                        radius: 8, color: '#009688', fillColor: '#009688',
+                        fillOpacity: 0.7, weight: 2
+                    });
+                    marker.bindPopup(`<b>${p.name || ''}</b><br>${p.city || ''}<br>${p.category || ''}<br><i>${p.description || ''}</i>`);
+                    marker.bindTooltip(p.name || 'Sted');
+                    placesLayer.addLayer(marker);
+                    placeCount++;
+                });
+            }
 
-            fetch('/api/search', {
+            const total = aedCount + landmarkCount + placeCount;
+            statusBar.innerHTML =
+                `✓ ${total} markører lastet (${elapsed}s) — ` +
+                `AED: <b>${aedCount}</b> (${openCount} åpne, ${closedCount} stengt) · ` +
+                `Landemerker: <b>${landmarkCount}</b> · ` +
+                `Steder: <b>${placeCount}</b>`;
+
+            console.log(`[DIAG-FRONTEND] loaded ${total} features, elapsed=${elapsed}s`);
+
+        } catch (err) {
+            statusBar.textContent = '✗ Feil ved lasting av data: ' + err.message;
+            showToast('Feil: ' + err.message, 'error');
+            console.error(err);
+        }
+    }
+
+    function refreshData() {
+        showToast('Oppdaterer data…', 'info');
+        loadLayers();
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  Spatial search
+    // ═══════════════════════════════════════════════════
+    async function performSearch() {
+        const radius = parseFloat(document.getElementById('search-radius').value);
+        if (!searchPoint) {
+            showToast('Klikk på kartet først for å sette søkesenter', 'error');
+            return;
+        }
+        try {
+            const resp = await fetch('/api/search', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    radius_km: parseFloat(radius),
+                    radius_km: radius,
                     lat: searchPoint.lat,
                     lng: searchPoint.lng
                 })
-            })
-            .then(response => response.json())
-            .then(data => {
-                showLoading(false);
-                if (data.status === 'success') {
-                    showToast(`Found ${data.count} features within ${radius}km`, 'success');
-                    // Reload page to show updated map with search results
-                    setTimeout(() => location.reload(), 1000);
-                } else {
-                    showToast('Search failed: ' + data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showLoading(false);
-                showToast('Error: ' + error.message, 'error');
             });
+            const data = await resp.json();
+            if (data.status === 'success') {
+                // Draw circle
+                if (searchCircle) map.removeLayer(searchCircle);
+                searchCircle = L.circle([searchPoint.lat, searchPoint.lng], {
+                    radius: radius * 1000, color: '#ff6b6b',
+                    fill: false, weight: 2, dashArray: '5,5'
+                }).addTo(map);
+                showToast(`Fant ${data.count} features innen ${radius} km`, 'success');
+            } else {
+                showToast('Søk feilet: ' + (data.message || ''), 'error');
+            }
+        } catch (err) {
+            showToast('Feil: ' + err.message, 'error');
         }
+    }
 
-        // Show loading indicator
-        function showLoading(show) {
-            document.getElementById('loading').style.display = show ? 'block' : 'none';
-        }
+    // ═══════════════════════════════════════════════════
+    //  Toast
+    // ═══════════════════════════════════════════════════
+    function showToast(msg, type = 'success') {
+        const t = document.createElement('div');
+        t.className = 'toast ' + type;
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 3500);
+    }
 
-        // Show toast notification
-        function showToast(message, type = 'success') {
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.textContent = message;
-            document.body.appendChild(toast);
-
-            setTimeout(() => {
-                toast.remove();
-            }, 3000);
-        }
-
-        // Initialize on page load
-        window.addEventListener('load', function() {
-            initMapInteraction();
-            showToast('Map loaded successfully!', 'success');
-        });
+    // ═══════════════════════════════════════════════════
+    //  Init
+    // ═══════════════════════════════════════════════════
+    window.addEventListener('load', () => loadLayers());
     </script>
 </body>
 </html>

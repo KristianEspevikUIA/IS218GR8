@@ -1,6 +1,6 @@
 """
 Flask Web Application for Interactive Web Map
-MVC Architecture with Folium, GeoPandas, and OGC API support
+MVC Architecture with Leaflet.js dynamic frontend + Supabase REST backend
 """
 import os
 from dotenv import load_dotenv
@@ -26,61 +26,49 @@ def initialize_app():
         app.initialized = True
 
 
+# ==================== MAIN PAGE ====================
+
 @app.route('/')
 def index():
-    """Render main map page"""
-    map_html = controller.get_map_html()
-    
-    # Data catalog
+    """Render main map page (Leaflet.js loads data dynamically via /api/map/layers)"""
     data_catalog = [
-        {
-            'dataset': 'Norwegian Cities & Landmarks',
-            'source': 'Local file',
-            'format': 'GeoJSON (Point/LineString)',
-            'processing': 'Manually curated from OSM data'
-        },
-        {
-            'dataset': 'GeoNorge API',
-            'source': 'External WFS/WMS',
-            'format': 'GeoJSON',
-            'processing': 'Real-time fetching via HTTP'
-        },
-        {
-            'dataset': 'OpenStreetMap Basemap',
-            'source': 'Mapnik tiles',
-            'format': 'XYZ Tiles',
-            'processing': 'Served via CDN'
-        }
+        {'dataset': 'AED Locations (Hjertestarterregister)',
+         'source': 'Supabase (synced from API)'},
+        {'dataset': 'Norwegian Cities & Landmarks',
+         'source': 'Local GeoJSON'},
+        {'dataset': 'Supabase Places',
+         'source': 'Supabase PostGIS'},
+        {'dataset': 'OpenStreetMap Basemap',
+         'source': 'CDN Tiles'},
     ]
-    
-    return render_template(
-        'index.html',
-        map_html=map_html,
-        data_catalog=data_catalog
-    )
+    return render_template('index.html', data_catalog=data_catalog)
 
+
+# ==================== DYNAMIC MAP DATA API ====================
+
+@app.route('/api/map/layers')
+def get_map_layers():
+    """
+    Return all map layers as GeoJSON.
+    Called by Leaflet.js on every page load → always fresh data.
+    """
+    layers = controller.get_all_layers_geojson()
+    return jsonify(layers)
+
+
+# ==================== SPATIAL SEARCH ====================
 
 @app.route('/api/search', methods=['POST'])
 def spatial_search():
-    """
-    API endpoint for spatial search
-    Expects JSON: {radius_km: float, lat: float, lng: float}
-    """
     try:
         data = request.get_json()
         radius_km = float(data.get('radius_km', 5))
         lat = float(data.get('lat'))
         lng = float(data.get('lng'))
-        
-        # Set search point
         controller.map_model.set_search_point(lat, lng)
-        
-        # Perform search
         results = controller.perform_spatial_search(radius_km)
-        
         return jsonify({
-            'status': 'success',
-            'count': len(results),
+            'status': 'success', 'count': len(results),
             'features': results,
             'search_point': {'lat': lat, 'lng': lng},
             'radius_km': radius_km
@@ -91,222 +79,107 @@ def spatial_search():
 
 @app.route('/api/ogc-api', methods=['POST'])
 def fetch_ogc_data():
-    """
-    API endpoint to fetch OGC API data
-    Expects JSON: {url: str, params: dict}
-    """
     try:
         data = request.get_json()
         url = data.get('url')
         params = data.get('params', {})
-        
         if not url:
             return jsonify({'status': 'error', 'message': 'URL required'}), 400
-        
-        # Fetch data
         success = controller.fetch_ogc_api(url, params)
-        
         if success:
-            return jsonify({
-                'status': 'success',
-                'message': f'Loaded data from {url}'
-            })
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': 'Failed to load OGC API data'
-            }), 400
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 400
-
-
-@app.route('/api/export-map')
-def export_map():
-    """Export map as HTML file"""
-    try:
-        filepath = 'map_export.html'
-        controller.save_map(filepath)
-        return jsonify({
-            'status': 'success',
-            'filepath': filepath,
-            'message': 'Map exported successfully'
-        })
+            return jsonify({'status': 'success', 'message': f'Loaded data from {url}'})
+        return jsonify({'status': 'error', 'message': 'Failed to load OGC API data'}), 400
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
 
 @app.route('/api/data-sources')
 def get_data_sources():
-    """Get registered data sources"""
-    sources = [
-        {
-            'id': 'geojson-local',
-            'name': 'Local GeoJSON Data',
-            'type': 'geojson',
-            'visible': controller.map_model.layers['geojson-local']['visible']
-        },
-        {
-            'id': 'ogc-api',
-            'name': 'GeoNorge API Data',
-            'type': 'ogc_api',
-            'visible': controller.map_model.layers['ogc-api']['visible']
-        }
-    ]
+    sources = []
+    for lid, layer in controller.map_model.layers.items():
+        sources.append({
+            'id': lid,
+            'name': layer.get('name', lid),
+            'visible': layer.get('visible', True),
+        })
     return jsonify(sources)
 
 
-# ==================== SUPABASE API ENDPOINTS ====================
+# ==================== SUPABASE PLACES API ====================
 
 @app.route('/api/supabase/places', methods=['GET'])
 def get_supabase_places():
-    """
-    Fetch all places from Supabase
-    Returns list of place records
-    """
     try:
         places = controller.data_model.get_all_locations()
-        return jsonify({
-            'status': 'success',
-            'count': len(places),
-            'data': places
-        })
+        return jsonify({'status': 'success', 'count': len(places), 'data': places})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
 
 @app.route('/api/supabase/places/<int:place_id>', methods=['GET'])
 def get_supabase_place(place_id):
-    """
-    Fetch a specific place from Supabase by ID
-    """
     try:
         place = controller.data_model.get_location_by_id(place_id)
         if place:
-            return jsonify({
-                'status': 'success',
-                'data': place
-            })
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': f'Place {place_id} not found'
-            }), 404
+            return jsonify({'status': 'success', 'data': place})
+        return jsonify({'status': 'error', 'message': f'Place {place_id} not found'}), 404
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
 
 @app.route('/api/supabase/places', methods=['POST'])
 def create_supabase_place():
-    """
-    Create a new place in Supabase
-    Expects JSON: {
-        name: str, 
-        description: str, 
-        city: str,
-        category: str,
-        latitude: float, 
-        longitude: float
-    }
-    """
     try:
         data = request.get_json()
-        
-        # Validate required fields
-        required_fields = ['name', 'description', 'city', 'category', 'latitude', 'longitude']
-        if not all(key in data for key in required_fields):
-            return jsonify({
-                'status': 'error',
-                'message': f'Missing required fields: {", ".join(required_fields)}'
-            }), 400
-        
-        # Insert into Supabase
+        required = ['name', 'description', 'city', 'category', 'latitude', 'longitude']
+        if not all(k in data for k in required):
+            return jsonify({'status': 'error',
+                            'message': f'Missing fields: {", ".join(required)}'}), 400
         result = controller.data_model.insert_place(
-            name=data['name'],
-            description=data['description'],
-            city=data['city'],
-            category=data['category'],
-            latitude=float(data['latitude']),
-            longitude=float(data['longitude'])
+            name=data['name'], description=data['description'],
+            city=data['city'], category=data['category'],
+            latitude=float(data['latitude']), longitude=float(data['longitude'])
         )
-        
-        return jsonify({
-            'status': 'success',
-            'message': 'Place created successfully',
-            'data': result
-        }), 201
+        return jsonify({'status': 'success', 'data': result}), 201
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
 
 @app.route('/api/supabase/places/<int:place_id>', methods=['PUT'])
 def update_supabase_place(place_id):
-    """
-    Update a place in Supabase
-    Expects JSON with fields to update
-    """
     try:
         data = request.get_json()
         result = controller.data_model.update_supabase('places', place_id, data)
-        
         if result:
-            return jsonify({
-                'status': 'success',
-                'message': 'Place updated successfully',
-                'data': result
-            })
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': f'Place {place_id} not found'
-            }), 404
+            return jsonify({'status': 'success', 'data': result})
+        return jsonify({'status': 'error', 'message': f'Place {place_id} not found'}), 404
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
 
 @app.route('/api/supabase/places/<int:place_id>', methods=['DELETE'])
 def delete_supabase_place(place_id):
-    """
-    Delete a place from Supabase
-    """
     try:
-        success = controller.data_model.delete_supabase('places', place_id)
-        
-        if success:
-            return jsonify({
-                'status': 'success',
-                'message': f'Place {place_id} deleted successfully'
-            })
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': f'Could not delete place {place_id}'
-            }), 404
+        ok = controller.data_model.delete_supabase('places', place_id)
+        if ok:
+            return jsonify({'status': 'success', 'message': f'Place {place_id} deleted'})
+        return jsonify({'status': 'error', 'message': f'Could not delete {place_id}'}), 404
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
 
 @app.route('/api/supabase/places/nearby', methods=['POST'])
 def get_nearby_places():
-    """
-    Find places near a point using PostGIS spatial query
-    Uses places_within_radius() RPC function
-    Expects JSON: {latitude: float, longitude: float, radius_km: float}
-    """
     try:
         data = request.get_json()
-        latitude = float(data.get('latitude'))
-        longitude = float(data.get('longitude'))
-        radius_km = float(data.get('radius_km', 10))
-        
-        # Use PostGIS function for efficient spatial query
-        nearby_places = controller.data_model.places_within_radius(latitude, longitude, radius_km)
-        
+        lat = float(data.get('latitude'))
+        lng = float(data.get('longitude'))
+        r = float(data.get('radius_km', 10))
+        nearby = controller.data_model.places_within_radius(lat, lng, r)
         return jsonify({
-            'status': 'success',
-            'count': len(nearby_places),
-            'search_point': {'latitude': latitude, 'longitude': longitude},
-            'radius_km': radius_km,
-            'data': nearby_places
+            'status': 'success', 'count': len(nearby),
+            'search_point': {'latitude': lat, 'longitude': lng},
+            'radius_km': r, 'data': nearby
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
@@ -314,140 +187,55 @@ def get_nearby_places():
 
 @app.route('/api/supabase/places/city/<city>', methods=['GET'])
 def get_places_by_city(city):
-    """
-    Get all places in a specific city
-    :param city: City name
-    """
     try:
         places = controller.data_model.get_places_by_city(city)
-        return jsonify({
-            'status': 'success',
-            'city': city,
-            'count': len(places),
-            'data': places
-        })
+        return jsonify({'status': 'success', 'city': city,
+                        'count': len(places), 'data': places})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
 
 @app.route('/api/supabase/places/category/<category>', methods=['GET'])
 def get_places_by_category(category):
-    """
-    Get all places in a specific category
-    :param category: Category name (landmark, church, nature, sport, park, castle, etc.)
-    """
     try:
         places = controller.data_model.get_places_by_category(category)
-        return jsonify({
-            'status': 'success',
-            'category': category,
-            'count': len(places),
-            'data': places
-        })
+        return jsonify({'status': 'success', 'category': category,
+                        'count': len(places), 'data': places})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
 
-# ==================== HJERTESTARTERREGISTER API ENDPOINTS ====================
+# ==================== HJERTESTARTERREGISTER AED ENDPOINTS ====================
 
 @app.route('/api/aeds/available', methods=['GET'])
 def get_available_aeds():
-    """
-    Get list of ONLY available (open) AEDs in Kristiansand/Agder
-    Optional query parameters:
-      - latitude: Center latitude (default: Kristiansand 58.1414)
-      - longitude: Center longitude (default: Kristiansand 8.0842)
-      - distance: Search distance in meters (default: 15000 meters = 15 km)
-    Returns list of available AEDs sorted by nearest first
-    """
     try:
-        # Get query parameters
-        latitude = request.args.get('latitude', type=float)
-        longitude = request.args.get('longitude', type=float)
-        distance = request.args.get('distance', type=int)
-        
-        # Fetch available AEDs
-        available_aeds = controller.data_model.get_available_aeds(
-            latitude=latitude,
-            longitude=longitude,
-            distance=distance
+        lat = request.args.get('latitude', type=float)
+        lng = request.args.get('longitude', type=float)
+        dist = request.args.get('distance', type=int)
+        aeds = controller.data_model.get_available_aeds(
+            latitude=lat, longitude=lng, distance=dist
         )
-        
-        # Determine search center and radius for response
-        if latitude is None:
-            latitude = 58.1414  # Kristiansand
-        if longitude is None:
-            longitude = 8.0842  # Kristiansand
-        if distance is None:
-            distance = 15000  # 15 km
-        
-        if available_aeds:
-            return jsonify({
-                'status': 'success',
-                'count': len(available_aeds),
-                'search_center': {
-                    'latitude': latitude,
-                    'longitude': longitude,
-                    'name': 'Kristiansand' if (latitude == 58.1414 and longitude == 8.0842) else 'Custom location'
-                },
-                'search_radius_meters': distance,
-                'search_radius_km': distance / 1000,
-                'data': available_aeds
-            })
-        else:
-            return jsonify({
-                'status': 'success',
-                'count': 0,
-                'message': f'No available AEDs found in {distance / 1000:.1f} km radius',
-                'search_center': {
-                    'latitude': latitude,
-                    'longitude': longitude,
-                    'name': 'Kristiansand' if (latitude == 58.1414 and longitude == 8.0842) else 'Custom location'
-                },
-                'search_radius_meters': distance,
-                'search_radius_km': distance / 1000,
-                'data': []
-            })
+        return jsonify({
+            'status': 'success', 'count': len(aeds),
+            'search_center': {'latitude': lat or 58.1414, 'longitude': lng or 8.0842},
+            'search_radius_km': (dist or 15000) / 1000,
+            'data': aeds
+        })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
 
 @app.route('/api/aeds/available/count', methods=['GET'])
 def get_available_aeds_count():
-    """
-    Get count of available AEDs in Kristiansand/Agder
-    Optional query parameters:
-      - latitude: Center latitude (default: Kristiansand)
-      - longitude: Center longitude (default: Kristiansand)
-      - distance: Search distance in meters (default: 15 km)
-    """
     try:
-        latitude = request.args.get('latitude', type=float)
-        longitude = request.args.get('longitude', type=float)
-        distance = request.args.get('distance', type=int)
-        
-        available_aeds = controller.data_model.get_available_aeds(
-            latitude=latitude,
-            longitude=longitude,
-            distance=distance
+        lat = request.args.get('latitude', type=float)
+        lng = request.args.get('longitude', type=float)
+        dist = request.args.get('distance', type=int)
+        aeds = controller.data_model.get_available_aeds(
+            latitude=lat, longitude=lng, distance=dist
         )
-        
-        if latitude is None:
-            latitude = 58.1414
-        if longitude is None:
-            longitude = 8.0842
-        if distance is None:
-            distance = 15000
-        
-        return jsonify({
-            'status': 'success',
-            'count': len(available_aeds),
-            'search_center': {
-                'latitude': latitude,
-                'longitude': longitude
-            },
-            'search_radius_km': distance / 1000
-        })
+        return jsonify({'status': 'success', 'count': len(aeds)})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 

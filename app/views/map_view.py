@@ -25,6 +25,7 @@ class MapView:
                          color: str = '#3388ff', popup_fields: List[str] = None):
         """
         Add GeoJSON layer to map with data-driven styling
+        Supports IS_OPEN status coloring for AEDs
         :param layer_id: Unique layer identifier
         :param features: List of GeoJSON features
         :param color: Default layer color (used if no specific style applies)
@@ -36,9 +37,16 @@ class MapView:
             geometry = feature.get('geometry', {})
             properties = feature.get('properties', {})
             
-            # Data-driven styling based on property 'type'
+            # Data-driven styling based on property 'type' or 'is_available'
             feature_color = color
-            if 'type' in properties:
+            
+            # Check for AED IS_OPEN status first
+            if 'is_available' in properties:
+                if properties['is_available']:
+                    feature_color = '#27ae60'  # Green = OPEN
+                else:
+                    feature_color = '#e74c3c'  # Red = CLOSED
+            elif 'type' in properties:
                 type_val = properties['type']
                 if type_val == 'Government Building':
                     feature_color = '#795548'  # Brown
@@ -64,7 +72,9 @@ class MapView:
                     fillColor=feature_color,
                     fillOpacity=0.7,
                     weight=2,
-                    opacity=0.9
+                    opacity=0.9,
+                    tooltip=folium.Tooltip(f"{properties.get('site_name', 'AED')} "
+                                          f"{'(OPEN)' if properties.get('is_available') else '(CLOSED)'}")
                 ).add_to(feature_group)
                 
             elif geometry['type'] == 'LineString':
