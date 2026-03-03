@@ -1,119 +1,187 @@
 {
     "type": "FeatureCollection",
+    "name": "beredskapsressurser_kristiansand",
+    "description": "Kritiske beredskapsressursar i Kristiansand-regionen — utvunne frå OpenStreetMap og offentlege kjelder. Relevante for Totalforsvaret.",
     "features": [
         {
             "type": "Feature",
             "properties": {
-                "name": "Oslo City Hall",
-                "city": "Oslo",
-                "type": "Government Building",
-                "year_built": 1950,
-                "population": 634293
+                "name": "Sørlandet sykehus Kristiansand",
+                "category": "Sjukehus",
+                "description": "Regionssjukehus for Agder — akuttmottak, traumesenter og helikopterlandingsplass",
+                "address": "Serviceboks 416, 4604 Kristiansand",
+                "operator": "Sørlandet sykehus HF",
+                "capacity": "Stort regionsjukehus",
+                "source": "OpenStreetMap / Helse Sør-Øst"
             },
             "geometry": {
                 "type": "Point",
-                "coordinates": [
-                    10.7339,
-                    59.9139
-                ]
+                "coordinates": [7.9956, 58.1578]
             }
         },
         {
             "type": "Feature",
             "properties": {
-                "name": "Bergen Harbor",
-                "city": "Bergen",
-                "type": "Port",
-                "year_built": 1200,
-                "population": 285900
+                "name": "Kristiansand legevakt",
+                "category": "Legevakt",
+                "description": "Akutt legehjelp utanfor ordinær kontortid — medisinsk naudtelefon 116 117",
+                "address": "Tollbodgata 73, 4614 Kristiansand",
+                "operator": "Kristiansand kommune",
+                "capacity": "Døgnopen legevakt",
+                "source": "OpenStreetMap / Kristiansand kommune"
             },
             "geometry": {
                 "type": "Point",
-                "coordinates": [
-                    5.3221,
-                    60.3913
-                ]
+                "coordinates": [8.0004, 58.1462]
             }
         },
         {
             "type": "Feature",
             "properties": {
-                "name": "Stavanger Cathedral",
-                "city": "Stavanger",
-                "type": "Religious Building",
-                "year_built": 1125,
-                "population": 144652
+                "name": "AMK Agder — naudmeldesentralen",
+                "category": "Naudsentral",
+                "description": "Akuttmedisinsk kommunikasjonssentral — koordinerer ambulansar og luftambulanse i Agder. Ring 113.",
+                "address": "Sørlandet sykehus, 4604 Kristiansand",
+                "operator": "Helse Sør-Øst RHF",
+                "capacity": "Regional AMK-sentral",
+                "source": "Helse Sør-Øst"
             },
             "geometry": {
                 "type": "Point",
-                "coordinates": [
-                    5.7331,
-                    58.9699
-                ]
+                "coordinates": [7.9970, 58.1584]
             }
         },
         {
             "type": "Feature",
             "properties": {
-                "name": "Nidaros Cathedral",
-                "city": "Trondheim",
-                "type": "Religious Building",
-                "year_built": 1070,
-                "population": 193559
+                "name": "Sivilforsvaret Agder",
+                "category": "Sivilforsvar",
+                "description": "Sivilforsvarsdistrikt for Agder — forsterkingsressurs ved kriser, naturkatastrofar og krig",
+                "address": "Setesdalsveien 2, 4617 Kristiansand",
+                "operator": "Direktoratet for samfunnssikkerhet og beredskap (DSB)",
+                "capacity": "Distriktskontor",
+                "source": "DSB / Sivilforsvaret"
             },
             "geometry": {
                 "type": "Point",
-                "coordinates": [
-                    10.3951,
-                    63.4269
-                ]
+                "coordinates": [8.0080, 58.1565]
             }
         },
         {
             "type": "Feature",
             "properties": {
-                "name": "Tromsø Arctic Cathedral",
-                "city": "Tromsø",
-                "type": "Religious Building",
-                "year_built": 1965,
-                "population": 77570
+                "name": "Kristiansand politistasjon",
+                "category": "Politi",
+                "description": "Hovudstasjon for Agder politidistrikt — ansvarleg for orden, etterforsking og beredskap",
+                "address": "Tollbodgata 31, 4611 Kristiansand",
+                "operator": "Agder politidistrikt",
+                "capacity": "Distriktshovudkvarter",
+                "source": "OpenStreetMap / Politiet"
             },
             "geometry": {
                 "type": "Point",
-                "coordinates": [
-                    18.9553,
-                    69.6492
-                ]
+                "coordinates": [7.9929, 58.1469]
             }
         },
         {
             "type": "Feature",
             "properties": {
-                "name": "Northern Railway",
-                "city": "Multiple",
-                "type": "Infrastructure",
-                "year_built": 1902,
-                "length_km": 1147
+                "name": "110-sentralen Agder",
+                "category": "Naudsentral",
+                "description": "Brann- og redningssentral for Agder — koordinerer brannvesen og redningsteneste. Ring 110.",
+                "address": "Rådhusgata 18, 4611 Kristiansand",
+                "operator": "Kristiansandsregionen brann og redning IKS",
+                "capacity": "Regional 110-sentral",
+                "source": "DSB / 110-sentralen"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [7.9897, 58.1458]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Universitetet i Agder — Campus Kristiansand",
+                "category": "Evakueringsstad",
+                "description": "Stort bygg med kapasitet som evakueringssenter — feltkjøken, overnattingsareal og samlingsplassar",
+                "address": "Universitetsveien 25, 4630 Kristiansand",
+                "operator": "Universitetet i Agder",
+                "capacity": "5000+ personar",
+                "source": "OpenStreetMap / UiA"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [8.0182, 58.1637]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Kristiansand havn — Kai 5",
+                "category": "Hamn / Evakuering",
+                "description": "Djupvasskai for forsyning og evakuering sjøvegen — sentral i maritim beredskap",
+                "address": "Gravane, 4610 Kristiansand",
+                "operator": "Kristiansand Havn KF",
+                "capacity": "Ferjeterminal + last",
+                "source": "OpenStreetMap / Kristiansand Havn"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [7.9948, 58.1396]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Kjevik lufthamn (KRS)",
+                "category": "Flyplass",
+                "description": "Regional lufthamn — viktig for luftevakuering, luftambulanse og forsyning i krise",
+                "address": "Kjevikveien 100, 4656 Hamresanden",
+                "operator": "Avinor",
+                "capacity": "2 millionar passasjerar/år",
+                "source": "OpenStreetMap / Avinor"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [8.0764, 58.2041]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Agder Røde Kors — distriktskontor",
+                "category": "Frivillig beredskap",
+                "description": "Frivillig beredskapsorganisasjon — hjelpekorps, førstehjelp, søk og redning",
+                "address": "Tordenskjolds gate 9, 4612 Kristiansand",
+                "operator": "Norges Røde Kors",
+                "capacity": "Regional koordinering",
+                "source": "Røde Kors"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [7.9903, 58.1480]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Hovedforsyningsrute E18/E39",
+                "category": "Infrastruktur",
+                "description": "Hovudvegakse gjennom Kristiansand — kritisk logistikkåre for forsyning og evakuering i Agder",
+                "operator": "Statens vegvesen",
+                "source": "OpenStreetMap / Statens vegvesen"
             },
             "geometry": {
                 "type": "LineString",
                 "coordinates": [
-                    [
-                        10.7339,
-                        59.9139
-                    ],
-                    [
-                        11.0905,
-                        60.5925
-                    ],
-                    [
-                        10.3951,
-                        63.4269
-                    ],
-                    [
-                        18.9553,
-                        69.6492
-                    ]
+                    [7.7500, 58.1000],
+                    [7.8500, 58.1200],
+                    [7.9500, 58.1400],
+                    [8.0000, 58.1450],
+                    [8.0500, 58.1500],
+                    [8.1500, 58.1600],
+                    [8.2500, 58.1700]
                 ]
             }
         }

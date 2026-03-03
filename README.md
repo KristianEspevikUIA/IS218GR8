@@ -1,7 +1,7 @@
-# AED Kart Kristiansand — Interaktivt webkart
+# Beredskapskart Kristiansand — Interaktivt webkart
 
 ### TLDR
-Eit interaktivt webkart som viser alle hjertestartere (AED) i Kristiansand-regionen med sanntidsdata frå Hjertestarterregisteret. Prosjektet er knytt til **Totalforsvarets år 2025–2026** — hjertestartarar er ein kritisk del av sivilberedskapen, og rask tilgang til nærmaste *åpne* AED kan redde liv i akutte situasjonar. Kartet kombinerer lokal GeoJSON, eksternt API og Supabase PostGIS med romleg filtrering og rutenavigering.
+Eit interaktivt beredskapskart for Kristiansand-regionen knytt til **Totalforsvaret 2025–2026**. Kartet viser hjertestartarar (AED), brannstasjonar, sjukehus, naudnummer-sentralar og andre beredskapsressursar — samla på éit kart med sanntidsdata frå fleire kjelder. Prosjektet kombinerer lokal GeoJSON, eksternt API (Hjertestarterregisteret), OGC WFS (GeoNorge brannstasjonar) og Supabase PostGIS med romleg filtrering, rutenavigering og PostGIS-baserte spørjingar.
 
 **Live:** `http://localhost:3000`
 
@@ -14,12 +14,16 @@ Eit interaktivt webkart som viser alle hjertestartere (AED) i Kristiansand-regio
 ## Funksjonar
 
 - **263 AED-ar** frå Hjertestarterregister API med fargekoding (grøn = åpen, raud = stengt)
+- **Brannstasjonar frå OGC WFS** — henta live frå GeoNorge (WFS 2.0, GML-parsing)
+- **10+ beredskapsressursar** — sjukehus, legevakt, AMK, sivilforsvar, politi, Røde Kors, flyplass m.m.
 - **Rutenavigering** — finn nærmaste åpne AED frå din posisjon (OSRM gangveg-ruting)
+- **PostGIS romleg spørjing** — `ST_DWithin` for å finne AED-ar innan radius (server-side)
 - **Detaljerte popups** — adresse, etasje, beskrivelse, tilgang, åpningstider, serienummer
 - **Romleg søk** — klikk på kartet og søk innan radius
 - **Dynamisk kart** — Leaflet.js hentar ferske data kvar gong sida lastast
 - **MVC-arkitektur** — Flask-backend med rein separasjon av modell, syn og kontroller
 - **Supabase-integrasjon** — stader og (valfritt) AED-data via PostGIS
+- **Totalforsvar-tema** — mørkt beredskapstema med relevante datakategoriar
 - **Responsivt design** — fungerer på mobil og desktop
 
 ---
@@ -39,6 +43,7 @@ Eit interaktivt webkart som viser alle hjertestartere (AED) i Kristiansand-regio
 | **OSRM** | Hosted | Ruteberegning gangveg (gratis, ingen nøkkel) |
 | **Supabase PostGIS** | Hosted | Romleg database for stader |
 | **Hjertestarterregister API** | v1 | AED-kjeldedata (OAuth 2.0) |
+| **GeoNorge WFS** | 2.0.0 | Brannstasjonar (OGC WFS, GML 3.2) |
 | **OpenStreetMap** | CDN | Bakgrunnskart (rasterfliser) |
 
 ---
@@ -47,9 +52,11 @@ Eit interaktivt webkart som viser alle hjertestartere (AED) i Kristiansand-regio
 
 | Datasett | Kilde | Format | Bearbeiding |
 |----------|-------|--------|-------------|
-| Norske landemerke og byar | Lokalt kuratert frå OpenStreetMap | GeoJSON (Point, LineString) | Manuelt utvald, lagra som `norwegian_landmarks.geojson` |
 | AED-hjertestartarar (263 stk) | Hjertestarterregister API v1 | JSON → GeoJSON | OAuth 2.0-autentisering, koordinattransformasjon til GeoJSON, IS_OPEN-fargekoding, Haversine-avstand frå sentrum |
-| Stader (Supabase) | Supabase PostGIS (`places`-tabell) | JSON via REST | Henta med httpx, konvertert til GeoJSON-features med lat/lng |
+| Brannstasjonar (~10 stk) | GeoNorge WFS 2.0 (`wfs.brannstasjoner`) | GML 3.2 → GeoJSON | OGC WFS GetFeature med BBOX-filter, XML/GML-parsing til GeoJSON, eigenskapar: brannstasjon, brannvesen, stasjonstype, kasernert |
+| Beredskapsressursar (11 stk) | OpenStreetMap, DSB, Helse Sør-Øst, Avinor m.fl. | GeoJSON (Point, LineString) | Utvunne frå opne kjelder, kuratert og lagra som `norwegian_landmarks.geojson` — sjukehus, legevakt, AMK, politi, sivilforsvar, Røde Kors, evakueringsstad, hamn, flyplass |
+| Stader (Supabase) | Supabase PostGIS (`places`-tabell) | JSON via REST | Henta med httpx, konvertert til GeoJSON-features, romleg spørjing med `ST_DWithin` |
+| AED-romleg søk (PostGIS) | Supabase PostGIS (`hjertestartere`-tabell) | JSON via RPC | `nearby_hjertestartere()`-funksjon med `ST_DWithin` for server-side romleg filtrering |
 | Bakgrunnskart | OpenStreetMap (Mapnik) | XYZ rasterfliser | Levert via CDN, ingen bearbeiding |
 
 ---
@@ -97,8 +104,9 @@ Opne `http://localhost:3000` i nettlesaren.
 |-------|------|
 | 🟢 Grøn | AED åpen (IS_OPEN = Y) |
 | 🔴 Raud | AED stengt (IS_OPEN = N) |
-| 🔵 Blå | Landemerke (lokal GeoJSON) |
-| 🟢 Teal | Supabase-stad |
+| � Oransje | Brannstasjon (OGC WFS) |
+| 🔵 Blå | Beredskapsressurs (lokal GeoJSON) |
+| 🟢 Teal | Supabase-stad (PostGIS) |
 
 ### Klikk på ein AED-markør for detaljar
 
@@ -185,34 +193,37 @@ IS218GR8/
 |--------|-----------|-----------|
 | POST | `/api/search` | Filtrer etter avstand (Haversine) |
 | POST | `/api/ogc-api` | Hent data frå OGC API |
+| POST | `/api/postgis/nearby-aeds` | Finn AED-ar innan radius (PostGIS `ST_DWithin`) |
 
 ---
 
 ## Arkitektur
 
 ```
-┌────────────────────────────────────────┐
-│         Nettlesar (Leaflet.js)         │
-│  Dynamisk kart — hentar /api/map/layers│
-│  kvar gong sida lastast (cache: off)   │
-└──────────────┬─────────────────────────┘
-               │  fetch JSON
-       ┌───────▼────────┐
-       │  Flask Ruter    │
-       │  app/__init__.py│
-       └───────┬────────┘
-               │
-       ┌───────▼────────┐
-       │ AppController   │   ← orkestrasjon
-       └───┬───┬───┬────┘
-           │   │   │
-    ┌──────┘   │   └──────┐
-    ▼          ▼          ▼
- Lokal     Supabase    Hjertestart.
- GeoJSON   REST/httpx  API (OAuth)
+┌─────────────────────────────────────────────┐
+│          Nettlesar (Leaflet.js)             │
+│  Dynamisk kart — hentar /api/map/layers     │
+│  kvar gong sida lastast (cache: off)        │
+│  Lag: AED · Brannstasjonar · Beredskap · DB │
+└────────────────┬────────────────────────────┘
+                 │  fetch JSON
+         ┌───────▼────────┐
+         │  Flask Ruter    │
+         │  app/__init__.py│
+         └───────┬────────┘
+                 │
+         ┌───────▼────────┐
+         │ AppController   │   ← orkestrasjon
+         └──┬──┬──┬──┬───┘
+            │  │  │  │
+   ┌────────┘  │  │  └────────┐
+   ▼           ▼  ▼           ▼
+ Lokal      GeoNorge  Supabase   Hjertestart.
+ GeoJSON    WFS/GML   REST/httpx  API (OAuth)
+(beredskap) (brann)   (PostGIS)   (AED-data)
 ```
 
-Klienten (Leaflet.js) er heilt frikopla frå backend. Alle data kjem som GeoJSON via REST.
+Klienten (Leaflet.js) er heilt frikopla frå backend. Alle data kjem som GeoJSON via REST. Brannstasjonar vert henta live frå GeoNorge OGC WFS og konverterte frå GML 3.2 til GeoJSON server-side.
 
 ---
 
@@ -229,15 +240,15 @@ For å aktivere Supabase-synkronisering:
 
 ## Refleksjon
 
-1. **Autentisering og sikkerheit:** Applikasjonen har ikkje noko brukarautentisering. Supabase anon-nøkkel og API-credentials ligg i `.env`, men for ein produksjonsversjon bør ein leggje til Flask-Login eller JWT-basert tilgangskontroll slik at sensitive endepunkt ikkje er opne.
+1. **OGC WFS og GML-parsing:** Brannstasjonsdata kjem frå GeoNorge som GML 3.2 — eit XML-basert format som krev manuell parsing med `xml.etree.ElementTree`. Dette var meir krevjande enn forventa samanlikna med JSON-baserte API-ar, men viser korleis OGC-standardar fungerer i praksis. BBOX-filtrering gjer at berre relevante stasjonar vert henta.
 
-2. **Yting ved mange markørar:** Med 263 AED-ar fungerer MarkerCluster bra, men dersom ein utvider til heile Noreg (>10 000 AED-ar) vil klientside-rendering bli treg. Ei forbetring er å implementere server-side klynging eller vektorfliser (t.d. MapLibre GL JS med Protobuf-tiles).
+2. **PostGIS vs. Haversine:** Opphavleg brukte vi berre Python-basert Haversine for avstandsfiltrering. No nyttar vi `ST_DWithin` i Supabase for server-side romleg spørjing — mykje meir effektivt for store datasett og korrekt for sfærisk geometri. Den PyTHon-baserte Haversine er framleis fallback.
 
-3. **Supabase-tabellen `hjertestartere`:** Tabellen må opprettast manuelt i Supabase Dashboard. Ideelt sett burde appen auto-migrere skjemaet ved oppstart, eller ein CI/CD-pipeline kunne køyre migrasjonen automatisk.
+3. **Autentisering og sikkerheit:** Applikasjonen har ikkje noko brukarautentisering. Supabase anon-nøkkel og API-credentials ligg i `.env`, men for ein produksjonsversjon bør ein leggje til Flask-Login eller JWT-basert tilgangskontroll slik at sensitive endepunkt ikkje er opne.
 
-4. **Berre éin romleg spørjetype:** Noverande romleg filtrering brukar Haversine-avstand (sirkelradius). For meir avansert analyse kunne ein nytta PostGIS-funksjonar som `ST_Within`, `ST_Intersects` eller polygon-basert filtrering direkte i databasen.
+4. **Yting ved mange markørar:** Med 263 AED-ar + ~10 brannstasjonar + 11 beredskapsressursar fungerer MarkerCluster bra, men dersom ein utvider til heile Noreg (>10 000 AED-ar) vil klientside-rendering bli treg. Ei forbetring er å implementere server-side klynging eller vektorfliser.
 
-5. **Offline-støtte og PWA:** I ein beredskapssituasjon kan internett vere nede. Ei framtidig forbetring er å cache AED-data i Service Worker / localStorage slik at kartet fungerer offline med siste kjende data.
+5. **Offline-støtte og PWA:** I ein beredskapssituasjon kan internett vere nede. Ei framtidig forbetring er å cache AED-data i Service Worker / localStorage slik at kartet fungerer offline med siste kjende data — særleg relevant for Totalforsvar-scenariet.
 
 ---
 

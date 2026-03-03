@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Web Map - AED Kristiansand</title>
+    <title>Beredskapskart Kristiansand — Totalforsvaret</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- MarkerCluster CSS -->
@@ -13,42 +13,45 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f5f5f5; color: #333;
+            background: #1a1a2e; color: #eee;
         }
         #app { display: flex; height: 100vh; gap: 10px; padding: 10px; }
         #map {
             flex: 1; border-radius: 8px; z-index: 0;
-            box-shadow: 0 2px 8px rgba(0,0,0,.15);
+            box-shadow: 0 2px 8px rgba(0,0,0,.4);
         }
         #controls {
-            width: 310px; background: #fff; border-radius: 8px; overflow-y: auto;
+            width: 320px; background: #16213e; border-radius: 8px; overflow-y: auto;
             padding: 15px; display: flex; flex-direction: column; gap: 15px;
-            box-shadow: 0 2px 8px rgba(0,0,0,.15);
+            box-shadow: 0 2px 8px rgba(0,0,0,.4);
         }
+        #controls h3 { color: #e94560; font-size: 17px; }
+        #controls h4 { color: #0f3460; background: #e94560; padding: 4px 8px; border-radius: 4px; font-size: 13px; }
         .search-panel { display: flex; flex-direction: column; gap: 10px; }
-        .search-panel label { font-size: 12px; font-weight: 600; color: #2c3e50; }
+        .search-panel label { font-size: 12px; font-weight: 600; color: #ccc; }
         .search-panel input {
-            padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;
+            padding: 8px 10px; border: 1px solid #0f3460; border-radius: 4px; font-size: 14px;
+            background: #1a1a2e; color: #eee;
         }
         .btn {
             padding: 10px 15px; color: #fff; border: none; border-radius: 4px;
             cursor: pointer; font-size: 14px; font-weight: 600; transition: .2s;
         }
-        .btn-blue { background: #3388ff; }
-        .btn-blue:hover { background: #0056b3; }
+        .btn-blue { background: #0f3460; }
+        .btn-blue:hover { background: #1a4a8a; }
         .btn-green { background: #27ae60; }
         .btn-green:hover { background: #1e8449; }
         .data-catalog { margin-top: 10px; }
-        .data-catalog h3 { margin-bottom: 8px; color: #2c3e50; }
+        .data-catalog h3 { margin-bottom: 8px; }
         .catalog-table { width: 100%; font-size: 12px; border-collapse: collapse; }
         .catalog-table th, .catalog-table td {
-            border-bottom: 1px solid #ddd; padding: 8px; text-align: left;
+            border-bottom: 1px solid #0f3460; padding: 8px; text-align: left; color: #ddd;
         }
-        .catalog-table th { background: #ecf0f1; font-weight: 600; }
+        .catalog-table th { background: #0f3460; font-weight: 600; color: #fff; }
         #status-bar {
-            font-size: 12px; color: #666; padding: 6px 0; border-top: 1px solid #eee;
+            font-size: 12px; color: #aaa; padding: 6px 0; border-top: 1px solid #0f3460;
         }
-        .legend { font-size: 12px; }
+        .legend { font-size: 12px; color: #ccc; }
         .legend span { display: inline-block; width: 14px; height: 14px;
             border-radius: 50%; margin-right: 5px; vertical-align: middle; }
         .toast {
@@ -64,9 +67,9 @@
             to   { transform: translateX(0); opacity: 1; }
         }
         /* Routing styles */
-        .btn-route { background: #e74c3c; }
+        .btn-route { background: #e94560; }
         .btn-route:hover { background: #c0392b; }
-        .btn-route:disabled { background: #bbb; cursor: wait; }
+        .btn-route:disabled { background: #555; cursor: wait; }
         .btn-route .spinner {
             display: inline-block; width: 14px; height: 14px;
             border: 2px solid rgba(255,255,255,.4); border-top-color: #fff;
@@ -75,10 +78,10 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .route-info {
-            background: #fef9e7; border: 1px solid #f0c27a; border-radius: 4px;
-            padding: 10px; font-size: 13px; display: none;
+            background: #1a1a2e; border: 1px solid #e94560; border-radius: 4px;
+            padding: 10px; font-size: 13px; display: none; color: #eee;
         }
-        .route-info h5 { margin: 0 0 6px; color: #d35400; font-size: 14px; }
+        .route-info h5 { margin: 0 0 6px; color: #e94560; font-size: 14px; }
         .route-info p { margin: 3px 0; }
         .route-info .close-route {
             margin-top: 8px; padding: 5px 10px; font-size: 12px;
@@ -96,13 +99,15 @@
     <div id="app">
         <div id="map"></div>
         <div id="controls">
-            <h3>AED Kart - Kristiansand</h3>
+            <h3>🛡️ Beredskapskart — Kristiansand</h3>
+            <p style="font-size:11px;color:#aaa;margin-top:-8px">Totalforsvaret 2025–2026</p>
 
             <div class="legend">
                 <p><span style="background:#27ae60"></span> AED Åpen (IS_OPEN=Y)</p>
-                <p><span style="background:#e74c3c"></span> AED Stengt (IS_OPEN=N)</p>
-                <p><span style="background:#3388ff"></span> Landemerker (lokal)</p>
-                <p><span style="background:#009688"></span> Supabase steder</p>
+                <p><span style="background:#e94560"></span> AED Stengt (IS_OPEN=N)</p>
+                <p><span style="background:#ff8c00"></span> Brannstasjon (OGC WFS)</p>
+                <p><span style="background:#3388ff"></span> Beredskapsressurs (lokal)</p>
+                <p><span style="background:#009688"></span> Supabase-stad (PostGIS)</p>
             </div>
 
             <div class="search-panel">
@@ -161,20 +166,23 @@
 
     // Layer groups (dynamically cleared + rebuilt)
     let aedLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
-    let landmarkLayer = L.layerGroup();
-    let placesLayer   = L.layerGroup();
-    let searchCircle  = null;
-    let searchPoint   = null;
+    let beredskapLayer = L.layerGroup();
+    let brannLayer     = L.layerGroup();
+    let placesLayer    = L.layerGroup();
+    let searchCircle   = null;
+    let searchPoint    = null;
 
     // Add to map + overlay control
     aedLayer.addTo(map);
-    landmarkLayer.addTo(map);
+    beredskapLayer.addTo(map);
+    brannLayer.addTo(map);
     placesLayer.addTo(map);
 
     const overlays = {
-        "AED Hjertestartere": aedLayer,
-        "Landemerker":        landmarkLayer,
-        "Supabase steder":    placesLayer
+        "❤️ AED Hjertestartere":  aedLayer,
+        "🔥 Brannstasjoner (WFS)": brannLayer,
+        "🛡️ Beredskapsressursar":  beredskapLayer,
+        "📍 Supabase-stader":      placesLayer
     };
     L.control.layers(null, overlays).addTo(map);
 
@@ -199,7 +207,8 @@
 
             // ── Clear old markers ──
             aedLayer.clearLayers();
-            landmarkLayer.clearLayers();
+            beredskapLayer.clearLayers();
+            brannLayer.clearLayers();
             placesLayer.clearLayers();
 
             let aedCount = 0, openCount = 0, closedCount = 0;
@@ -210,7 +219,7 @@
                     const p = f.properties;
                     const [lng, lat] = f.geometry.coordinates;
                     const isOpen = !!p.is_available;
-                    const color = isOpen ? '#27ae60' : '#e74c3c';
+                    const color = isOpen ? '#27ae60' : '#e94560';
                     const label = isOpen ? 'ÅPEN' : 'STENGT';
 
                     const marker = L.circleMarker([lat, lng], {
@@ -247,30 +256,63 @@
                 });
             }
 
-            // ── Landmarks ──
-            let landmarkCount = 0;
-            if (data.landmarks && data.landmarks.features) {
-                data.landmarks.features.forEach(f => {
+            // ── Beredskapsressursar (local GeoJSON) ──
+            let beredskapCount = 0;
+            if (data.beredskap && data.beredskap.features) {
+                data.beredskap.features.forEach(f => {
                     const p = f.properties;
                     const geom = f.geometry;
 
                     if (geom.type === 'Point') {
                         const [lng, lat] = geom.coordinates;
                         const marker = L.circleMarker([lat, lng], {
-                            radius: 8, color: '#3388ff', fillColor: '#3388ff',
-                            fillOpacity: 0.7, weight: 2
+                            radius: 9, color: '#3388ff', fillColor: '#3388ff',
+                            fillOpacity: 0.8, weight: 2
                         });
-                        marker.bindPopup(`<b>${p.name || ''}</b><br>${p.city || ''}<br>${p.type || ''}`);
-                        marker.bindTooltip(p.name || 'Landemerke');
-                        landmarkLayer.addLayer(marker);
-                        landmarkCount++;
+                        let popup = `<div style="min-width:180px">`;
+                        popup += `<b style="font-size:13px">${p.name || ''}</b><br>`;
+                        if (p.category) popup += `<span style="display:inline-block;padding:2px 6px;border-radius:3px;color:#fff;background:#0f3460;font-size:11px;margin:3px 0">${p.category}</span><br>`;
+                        if (p.description) popup += `${p.description}<br>`;
+                        if (p.address) popup += `<small>${p.address}</small><br>`;
+                        if (p.operator) popup += `<small>Operatør: ${p.operator}</small><br>`;
+                        if (p.capacity) popup += `<small>Kapasitet: ${p.capacity}</small><br>`;
+                        popup += `</div>`;
+                        marker.bindPopup(popup, { maxWidth: 260 });
+                        marker.bindTooltip(`${p.name || 'Beredskap'} (${p.category || ''})`);
+                        beredskapLayer.addLayer(marker);
+                        beredskapCount++;
                     } else if (geom.type === 'LineString') {
                         const coords = geom.coordinates.map(c => [c[1], c[0]]);
-                        const line = L.polyline(coords, { color: '#3388ff', weight: 4, opacity: 0.8 });
+                        const line = L.polyline(coords, { color: '#3388ff', weight: 4, opacity: 0.7, dashArray: '8,6' });
                         line.bindPopup(`<b>${p.name || ''}</b><br>${p.description || ''}`);
-                        landmarkLayer.addLayer(line);
-                        landmarkCount++;
+                        beredskapLayer.addLayer(line);
+                        beredskapCount++;
                     }
+                });
+            }
+
+            // ── Brannstasjoner (OGC WFS) ──
+            let brannCount = 0;
+            if (data.brannstasjoner && data.brannstasjoner.features) {
+                data.brannstasjoner.features.forEach(f => {
+                    const p = f.properties;
+                    const [lng, lat] = f.geometry.coordinates;
+                    const marker = L.circleMarker([lat, lng], {
+                        radius: 10, color: '#ff8c00', fillColor: '#ff8c00',
+                        fillOpacity: 0.8, weight: 2
+                    });
+                    let popup = `<div style="min-width:180px">`;
+                    popup += `<b style="font-size:13px">🔥 ${p.brannstasjon || 'Brannstasjon'}</b><br>`;
+                    if (p.brannvesen) popup += `<b>Brannvesen:</b> ${p.brannvesen}<br>`;
+                    if (p.stasjonstype) popup += `<b>Type:</b> ${p.stasjonstype === 'H' ? 'Hovudstasjon' : p.stasjonstype === 'D' ? 'Depotstasjon' : p.stasjonstype}<br>`;
+                    if (p.kasernert) popup += `<b>Kasernert:</b> ${p.kasernert === 'JA' ? 'Ja (døgnbemanna)' : 'Nei'}<br>`;
+                    if (p.kommunenummer) popup += `<small>Kommunenr: ${p.kommunenummer}</small><br>`;
+                    popup += `<small style="color:#888">Kjelde: GeoNorge WFS (OGC)</small>`;
+                    popup += `</div>`;
+                    marker.bindPopup(popup, { maxWidth: 260 });
+                    marker.bindTooltip(`🔥 ${p.brannstasjon || 'Brannstasjon'}`);
+                    brannLayer.addLayer(marker);
+                    brannCount++;
                 });
             }
 
@@ -291,12 +333,13 @@
                 });
             }
 
-            const total = aedCount + landmarkCount + placeCount;
+            const total = aedCount + beredskapCount + brannCount + placeCount;
             statusBar.innerHTML =
-                `✓ ${total} markører lastet (${elapsed}s) — ` +
+                `✓ ${total} markører (${elapsed}s) — ` +
                 `AED: <b>${aedCount}</b> (${openCount} åpne, ${closedCount} stengt) · ` +
-                `Landemerker: <b>${landmarkCount}</b> · ` +
-                `Steder: <b>${placeCount}</b>`;
+                `Brannstasjonar: <b>${brannCount}</b> · ` +
+                `Beredskap: <b>${beredskapCount}</b> · ` +
+                `Stader: <b>${placeCount}</b>`;
 
             console.log(`[DIAG-FRONTEND] loaded ${total} features, elapsed=${elapsed}s`);
 

@@ -17,10 +17,57 @@ create table if not exists hjertestartere (
   opening_hours_text text,
   distance_meters float,
   distance_km float,
-  synced_at timestamp with time zone default timezone('utc'::text, now()) not null
+  synced_at timestamp with time zone default timezone('utc'::text, now()) not null,
+
+  -- Spatial column for PostGIS queries
+  location geography(POINT) generated always as (
+    ST_SetSRID(ST_MakePoint(site_longitude, site_latitude), 4326)::geography
+  ) stored
 );
 
 create index if not exists hjertestartere_asset_id_idx on hjertestartere (asset_id);
+create index if not exists hjertestartere_location_idx on hjertestartere using GIST (location);
+
+-- PostGIS RPC: Find nearby AEDs using ST_DWithin
+create or replace function nearby_hjertestartere(center_lat float, center_lng float, radius_km float)
+returns table (
+  id bigint,
+  asset_id bigint,
+  site_name text,
+  site_address text,
+  site_post_code text,
+  site_post_area text,
+  site_latitude float,
+  site_longitude float,
+  is_open boolean,
+  opening_hours_text text,
+  dist_km float
+)
+language sql
+as $$
+  select
+    id,
+    asset_id,
+    site_name,
+    site_address,
+    site_post_code,
+    site_post_area,
+    site_latitude,
+    site_longitude,
+    is_open,
+    opening_hours_text,
+    (ST_Distance(
+      location,
+      ST_SetSRID(ST_MakePoint(center_lng, center_lat), 4326)::geography
+    ) / 1000) as dist_km
+  from hjertestartere
+  where ST_DWithin(
+    location,
+    ST_SetSRID(ST_MakePoint(center_lng, center_lat), 4326)::geography,
+    radius_km * 1000
+  )
+  order by dist_km;
+$$;
 
 -- ══════════════════════════════════════════════════════════
 -- Places table
