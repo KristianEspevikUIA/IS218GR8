@@ -1,8 +1,13 @@
 # AED Kart Kristiansand — Interaktivt webkart
 
-Sanntidskart over hjertestartere (AED) i Kristiansand-regionen. Bygd med Flask, Leaflet.js og Supabase.
+### TLDR
+Eit interaktivt webkart som viser alle hjertestartere (AED) i Kristiansand-regionen med sanntidsdata frå Hjertestarterregisteret. Prosjektet er knytt til **Totalforsvarets år 2025–2026** — hjertestartarar er ein kritisk del av sivilberedskapen, og rask tilgang til nærmaste *åpne* AED kan redde liv i akutte situasjonar. Kartet kombinerer lokal GeoJSON, eksternt API og Supabase PostGIS med romleg filtrering og rutenavigering.
 
 **Live:** `http://localhost:3000`
+
+### Demo
+
+> *Video/GIF kjem her*
 
 ---
 
@@ -21,16 +26,31 @@ Sanntidskart over hjertestartere (AED) i Kristiansand-regionen. Bygd med Flask, 
 
 ## Teknisk stabel
 
-| Komponent | Formål |
-|-----------|--------|
-| **Python 3.11+** | Backend |
-| **Flask 3.0.0** | Nettrammeverk |
-| **Leaflet.js 1.9.4** | Dynamisk kartrammeverk (klientside) |
-| **MarkerCluster** | Gruppering av markørar |
-| **httpx** | Supabase REST-klient |
-| **OSRM** | Ruteberegning (gangveg, gratis, ingen nøkkel) |
-| **Supabase PostGIS** | Stader-database |
-| **Hjertestarterregister API** | AED-kjeldedata (OAuth 2.0) |
+| Komponent | Versjon | Formål |
+|-----------|---------|--------|
+| **Python** | 3.11+ | Backend runtime |
+| **Flask** | 3.0.0 | Nettrammeverk (MVC-ruter) |
+| **Leaflet.js** | 1.9.4 | Dynamisk kartrammeverk (klientside) |
+| **Leaflet.markercluster** | 1.5.3 | Klyngegruppering av markørar |
+| **httpx** | 0.25.2 | Supabase REST-klient (HTTP/2) |
+| **requests** | 2.31.0 | HTTP-klient for OGC/API-kall |
+| **geopy** | 2.4.0 | Haversine avstandsutrekningar |
+| **python-dotenv** | 1.0.0 | Miljøvariabel-lasting (.env) |
+| **OSRM** | Hosted | Ruteberegning gangveg (gratis, ingen nøkkel) |
+| **Supabase PostGIS** | Hosted | Romleg database for stader |
+| **Hjertestarterregister API** | v1 | AED-kjeldedata (OAuth 2.0) |
+| **OpenStreetMap** | CDN | Bakgrunnskart (rasterfliser) |
+
+---
+
+## Datakatalog
+
+| Datasett | Kilde | Format | Bearbeiding |
+|----------|-------|--------|-------------|
+| Norske landemerke og byar | Lokalt kuratert frå OpenStreetMap | GeoJSON (Point, LineString) | Manuelt utvald, lagra som `norwegian_landmarks.geojson` |
+| AED-hjertestartarar (263 stk) | Hjertestarterregister API v1 | JSON → GeoJSON | OAuth 2.0-autentisering, koordinattransformasjon til GeoJSON, IS_OPEN-fargekoding, Haversine-avstand frå sentrum |
+| Stader (Supabase) | Supabase PostGIS (`places`-tabell) | JSON via REST | Henta med httpx, konvertert til GeoJSON-features med lat/lng |
+| Bakgrunnskart | OpenStreetMap (Mapnik) | XYZ rasterfliser | Levert via CDN, ingen bearbeiding |
 
 ---
 
@@ -204,6 +224,20 @@ For å aktivere Supabase-synkronisering:
 
 1. Køyr SQL frå `supabase_schema.sql` i Supabase Dashboard → SQL Editor
 2. Køyr `py sync_aeds_to_supabase.py` for å synkronisere AED-data
+
+---
+
+## Refleksjon
+
+1. **Autentisering og sikkerheit:** Applikasjonen har ikkje noko brukarautentisering. Supabase anon-nøkkel og API-credentials ligg i `.env`, men for ein produksjonsversjon bør ein leggje til Flask-Login eller JWT-basert tilgangskontroll slik at sensitive endepunkt ikkje er opne.
+
+2. **Yting ved mange markørar:** Med 263 AED-ar fungerer MarkerCluster bra, men dersom ein utvider til heile Noreg (>10 000 AED-ar) vil klientside-rendering bli treg. Ei forbetring er å implementere server-side klynging eller vektorfliser (t.d. MapLibre GL JS med Protobuf-tiles).
+
+3. **Supabase-tabellen `hjertestartere`:** Tabellen må opprettast manuelt i Supabase Dashboard. Ideelt sett burde appen auto-migrere skjemaet ved oppstart, eller ein CI/CD-pipeline kunne køyre migrasjonen automatisk.
+
+4. **Berre éin romleg spørjetype:** Noverande romleg filtrering brukar Haversine-avstand (sirkelradius). For meir avansert analyse kunne ein nytta PostGIS-funksjonar som `ST_Within`, `ST_Intersects` eller polygon-basert filtrering direkte i databasen.
+
+5. **Offline-støtte og PWA:** I ein beredskapssituasjon kan internett vere nede. Ei framtidig forbetring er å cache AED-data i Service Worker / localStorage slik at kartet fungerer offline med siste kjende data.
 
 ---
 
