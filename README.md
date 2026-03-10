@@ -306,7 +306,7 @@ Notebooken utfører ein komplett romleg analyse av beredskapsressursar i Kristia
 
 ---
 
-### Del B: Utviing av Webkart (Spatial SQL)
+### Del B: Utviding av Webkart (Spatial SQL)
 
 #### Skildring av utvidinga
 
