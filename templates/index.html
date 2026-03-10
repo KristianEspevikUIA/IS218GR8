@@ -89,6 +89,24 @@
             cursor: pointer;
         }
         .route-info .close-route:hover { background: #7f8c8d; }
+        /* PostGIS spatial query styles */
+        .btn-postgis { background: #009688; flex: 2; }
+        .btn-postgis:hover { background: #00796b; }
+        .btn-postgis.active { background: #e94560; animation: pulse 1.5s infinite; }
+        .btn-clear { background: #78909c; }
+        .btn-clear:hover { background: #546e7a; }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(233,69,96,.5); }
+            50% { box-shadow: 0 0 0 8px rgba(233,69,96,0); }
+        }
+        .postgis-results {
+            background: #1a1a2e; border: 1px solid #009688; border-radius: 4px;
+            padding: 10px; font-size: 13px; color: #eee;
+        }
+        .postgis-result-item {
+            padding: 4px 0; border-bottom: 1px solid #0f3460; cursor: pointer;
+        }
+        .postgis-result-item:hover { background: #0f3460; }
         @media (max-width: 768px) {
             #app { flex-direction: column; }
             #controls { width: 100%; max-height: 30vh; }
@@ -113,9 +131,28 @@
             <div class="search-panel">
                 <h4>Spatial Search</h4>
                 <label for="search-radius">Søkeradius (km):</label>
-                <input type="number" id="search-radius" min="1" max="100" value="5">
+                <input type="number" id="search-radius" min="0.1" max="100" value="2" step="0.1">
                 <button class="btn btn-blue" onclick="performSearch()">Søk etter avstand</button>
                 <small style="color:#666">Klikk på kartet for å sette søkesenter</small>
+            </div>
+
+            <div class="search-panel">
+                <h4>PostGIS — Finn AED-ar</h4>
+                <label for="postgis-radius">PostGIS-radius (km):</label>
+                <input type="number" id="postgis-radius" min="0.1" max="50" value="2" step="0.1">
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                    <button class="btn btn-postgis" onclick="togglePostGISMode()">
+                        📍 Aktiver PostGIS-klikk
+                    </button>
+                    <button class="btn btn-clear" onclick="clearPostGISResults()" style="flex:1">✕ Nullstill</button>
+                </div>
+                <small id="postgis-status" style="color:#666">Klikk-modus: Av. Trykk knappen for å aktivere.</small>
+            </div>
+
+            <div id="postgis-results" class="postgis-results" style="display:none">
+                <h5 style="margin:0 0 6px;color:#009688;font-size:14px">📊 PostGIS-resultat</h5>
+                <p id="postgis-summary"></p>
+                <div id="postgis-list" style="max-height:150px;overflow-y:auto;font-size:12px"></div>
             </div>
 
             <button class="btn btn-green" onclick="refreshData()">🔄 Oppdater data</button>
@@ -172,24 +209,37 @@
     let searchCircle   = null;
     let searchPoint    = null;
 
+    // PostGIS result layer (declared early so overlay control can reference it)
+    let postgisMode = false;
+    let postgisClickMarker = null;
+    let postgisCircle = null;
+    let postgisResultLayer = L.layerGroup();
+
     // Add to map + overlay control
     aedLayer.addTo(map);
     beredskapLayer.addTo(map);
     brannLayer.addTo(map);
     placesLayer.addTo(map);
+    postgisResultLayer.addTo(map);
 
     const overlays = {
         "❤️ AED Hjertestartere":  aedLayer,
         "🔥 Brannstasjoner (WFS)": brannLayer,
         "🛡️ Beredskapsressursar":  beredskapLayer,
-        "📍 Supabase-stader":      placesLayer
+        "📍 Supabase-stader":      placesLayer,
+        "🔍 PostGIS-resultat":     postgisResultLayer
     };
     L.control.layers(null, overlays).addTo(map);
 
     // Click handler for search point
     map.on('click', function(e) {
-        searchPoint = e.latlng;
-        showToast(`Søkesenter: ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`, 'info');
+        if (postgisMode) {
+            // PostGIS spatial query mode — query ST_DWithin
+            queryPostGISNearby(e.latlng.lat, e.latlng.lng);
+        } else {
+            searchPoint = e.latlng;
+            showToast(`Søkesenter: ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`, 'info');
+        }
     });
 
     // ═══════════════════════════════════════════════════
@@ -601,6 +651,138 @@
             showToast(`Ruteberegning feilet — viser luftlinje (${nearestDist.toFixed(2)} km)`, 'error');
         } finally {
             setRouteLoading(false);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  PostGIS Spatial Query — Click-to-search AEDs
+    // ═══════════════════════════════════════════════════
+
+    function togglePostGISMode() {
+        postgisMode = !postgisMode;
+        const btn = document.querySelector('.btn-postgis');
+        const status = document.getElementById('postgis-status');
+        if (postgisMode) {
+            btn.classList.add('active');
+            btn.textContent = '🔴 PostGIS-klikk AKTIV';
+            status.textContent = 'Klikk på kartet for å søkje med ST_DWithin.';
+            status.style.color = '#e94560';
+            map.getContainer().style.cursor = 'crosshair';
+        } else {
+            btn.classList.remove('active');
+            btn.textContent = '📍 Aktiver PostGIS-klikk';
+            status.textContent = 'Klikk-modus: Av.';
+            status.style.color = '#666';
+            map.getContainer().style.cursor = '';
+        }
+    }
+
+    function clearPostGISResults() {
+        postgisResultLayer.clearLayers();
+        if (postgisClickMarker) { map.removeLayer(postgisClickMarker); postgisClickMarker = null; }
+        if (postgisCircle) { map.removeLayer(postgisCircle); postgisCircle = null; }
+        document.getElementById('postgis-results').style.display = 'none';
+        // Turn off mode
+        if (postgisMode) togglePostGISMode();
+    }
+
+    async function queryPostGISNearby(lat, lng) {
+        const radiusKm = parseFloat(document.getElementById('postgis-radius').value) || 2;
+        const statusBar = document.getElementById('status-bar');
+        statusBar.textContent = `PostGIS: Søkjer AED-ar innan ${radiusKm} km med ST_DWithin…`;
+
+        // ── Visual feedback: marker + circle ──
+        postgisResultLayer.clearLayers();
+        if (postgisClickMarker) map.removeLayer(postgisClickMarker);
+        if (postgisCircle) map.removeLayer(postgisCircle);
+
+        postgisClickMarker = L.marker([lat, lng], {
+            icon: L.divIcon({
+                className: '',
+                html: '<div style="background:#009688;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 6px rgba(0,0,0,.4);border:2px solid #fff">📍</div>',
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+            })
+        }).addTo(map);
+        postgisClickMarker.bindPopup(`<b>Søkepunkt</b><br>${lat.toFixed(5)}, ${lng.toFixed(5)}<br>Radius: ${radiusKm} km`).openPopup();
+
+        postgisCircle = L.circle([lat, lng], {
+            radius: radiusKm * 1000,
+            color: '#009688', fillColor: '#009688',
+            fillOpacity: 0.08, weight: 2, dashArray: '6,4'
+        }).addTo(map);
+
+        try {
+            const t0 = performance.now();
+            const resp = await fetch('/api/postgis/nearby-aeds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ latitude: lat, longitude: lng, radius_km: radiusKm })
+            });
+            const data = await resp.json();
+            const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+
+            if (data.status === 'success' && data.data) {
+                const aeds = data.data;
+
+                // ── Highlight results on map ──
+                let listHtml = '';
+                aeds.forEach((aed, idx) => {
+                    const isOpen = !!aed.is_open;
+                    const color = isOpen ? '#00e676' : '#ff5252';
+                    const label = isOpen ? 'ÅPEN' : 'STENGT';
+
+                    const marker = L.circleMarker([aed.site_latitude, aed.site_longitude], {
+                        radius: 12, color: '#fff', fillColor: color,
+                        fillOpacity: 0.9, weight: 3, opacity: 1
+                    });
+                    const dist = aed.dist_km ? aed.dist_km.toFixed(2) : '?';
+                    marker.bindPopup(
+                        `<div style="min-width:180px">` +
+                        `<b style="font-size:14px">${aed.site_name || 'AED'}</b><br>` +
+                        `<span style="display:inline-block;padding:2px 8px;border-radius:3px;color:#fff;background:${color};font-size:12px;font-weight:600;margin:3px 0">${label}</span><br>` +
+                        `<b>Adresse:</b> ${aed.site_address || ''}<br>` +
+                        `<b>Avstand:</b> ${dist} km (PostGIS ST_DWithin)<br>` +
+                        (aed.opening_hours_text ? `<b>Åpningstider:</b> ${aed.opening_hours_text}<br>` : '') +
+                        `<small style="color:#009688">Resultat frå PostGIS romleg spørjing</small>` +
+                        `</div>`,
+                        { maxWidth: 280 }
+                    );
+                    marker.bindTooltip(`#${idx+1}: ${aed.site_name || 'AED'} (${dist}km)`);
+                    postgisResultLayer.addLayer(marker);
+
+                    listHtml += `<div class="postgis-result-item" onclick="map.setView([${aed.site_latitude},${aed.site_longitude}],16)">` +
+                        `<b>#${idx+1}</b> ${aed.site_name || 'AED'} — ` +
+                        `<span style="color:${color}">${label}</span> — ${dist} km</div>`;
+                });
+
+                // ── Show results panel ──
+                const openCount = aeds.filter(a => a.is_open).length;
+                document.getElementById('postgis-summary').innerHTML =
+                    `<b>${aeds.length}</b> AED-ar funne innan <b>${radiusKm} km</b><br>` +
+                    `🟢 ${openCount} åpne · 🔴 ${aeds.length - openCount} stengte<br>` +
+                    `<small>Motor: PostGIS ST_DWithin (${elapsed}s)</small>`;
+                document.getElementById('postgis-list').innerHTML = listHtml;
+                document.getElementById('postgis-results').style.display = 'block';
+
+                statusBar.innerHTML = `✓ PostGIS: ${aeds.length} AED-ar funne (${elapsed}s) — motor: <b>ST_DWithin</b>`;
+                showToast(`PostGIS: Fann ${aeds.length} AED-ar innan ${radiusKm} km`, 'success');
+
+                // Zoom to fit results
+                if (aeds.length > 0) {
+                    const bounds = L.latLngBounds([[lat, lng]]);
+                    aeds.forEach(a => bounds.extend([a.site_latitude, a.site_longitude]));
+                    map.fitBounds(bounds.pad(0.2));
+                }
+
+            } else {
+                statusBar.textContent = '⚠ PostGIS: Ingen resultat eller feil';
+                showToast(data.message || 'Ingen AED-ar funne', 'error');
+            }
+        } catch (err) {
+            statusBar.textContent = '✗ PostGIS-feil: ' + err.message;
+            showToast('PostGIS-feil: ' + err.message, 'error');
+            console.error(err);
         }
     }
 
