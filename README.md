@@ -145,7 +145,8 @@ IS218GR8/
 │   └── data/
 │       └── norwegian_landmarks.geojson
 ├── templates/
-│   └── index.html               # Leaflet.js dynamisk kart
+│   └── index.html               # Leaflet.js dynamisk kart + PostGIS-klikk
+├── analyse_beredskap.ipynb      # Oppgave 2A: Romleg analyse (Notebook)
 ├── run.py                       # Startpunkt (port 3000)
 ├── requirements.txt             # Python-avhengigheiter
 ├── supabase_schema.sql          # Database-skjema
@@ -267,4 +268,152 @@ MIT — sjå [LICENSE](LICENSE)
 
 ---
 
-**Sist oppdatert:** Mars 3, 2026
+## Oppgave 2 — Romleg analyse og Spatial SQL
+
+### Del A: Romleg analyse i Python (Notebook)
+
+**Notebook:** [`analyse_beredskap.ipynb`](analyse_beredskap.ipynb)
+
+Notebooken utfører ein komplett romleg analyse av beredskapsressursar i Kristiansand, knytt til Totalforsvaret 2025–2026.
+
+#### Innhald og analysar
+
+| Analyse | Verktøy | Skildring |
+|---------|---------|-----------|
+| Data Ingest (3 datasett) | Pandas, GeoPandas, Requests | Lokal GeoJSON, Hjertestarterregister API (OAuth 2.0), GeoNorge WFS |
+| Attributtfiltrering | GeoPandas | Åpne vs. stengte AED-ar med fargekoda visualisering |
+| Romleg filtrering | GeoPandas (sjoin) | AED-ar innanfor Kristiansand kommunegrense |
+| Interaktivt kart | Folium + MarkerCluster | AED-ar og beredskapsressursar med popups |
+| SQL-analyse | DuckDB | AED per postområde, statistikk |
+| Buffer (500m) | GeoPandas/Shapely | Beredskapssone rundt åpne AED-ar |
+| Overlay (intersection) | GeoPandas | AED-dekking vs. kommuneareal |
+| Overlay (difference) | GeoPandas | Område utan AED-dekning |
+| Romleg aggregering | GeoPandas | AED-tettleik per km²-rute (grid) |
+| DEM / høgdedata | Rasterio, NumPy | Terrengmodell for Kristiansand |
+| Helningskart (slope) | GDAL / NumPy | Bratte område (> 30°) |
+| Vektorisering | rasterio.features | Polygonize bratte område |
+| Hillshade (2 stk) | NumPy / GDAL | Sol frå NV (315°/35°) og aust (90°/60°) |
+
+#### Verktøy
+
+- **Pandas** — databehandling
+- **GeoPandas** — romleg analyse (buffer, overlay, sjoin, dissolve)
+- **DuckDB** — SQL-spørjingar mot DataFrames
+- **Folium** — interaktiv kartvisualisering
+- **Matplotlib** — statisk visualisering
+- **Rasterio** — rasterdata (DEM, slope, hillshade)
+- **GDAL** — CLI-kommandoar dokumentert i notebook
+
+---
+
+### Del B: Utviing av Webkart (Spatial SQL)
+
+#### Skildring av utvidinga
+
+Webkartet er utvida med **interaktiv PostGIS-spørjing** via Supabase. Brukaren kan:
+
+1. **Aktivere PostGIS-klikkmodus** med knappen «📍 Aktiver PostGIS-klikk»
+2. **Klikke kvar som helst på kartet** — koordinatane vert sendt til Supabase
+3. **Sjå resultat** — AED-ar innanfor valt radius vert utheva med kvit kant og fargekoda (grøn = åpen, raud = stengt)
+4. **Justerbar radius** — brukar kan endre søkeradius (standard 2 km)
+5. **Resultatliste** — panel med alle funne AED-ar, sortert etter avstand, klikk for zoom
+
+#### Korleis det fungerer
+
+```
+Brukar klikkar → Frontend sender lat/lng + radius til Flask
+→ Flask kallar Supabase RPC: nearby_hjertestartere(lat, lng, radius)
+→ Supabase køyrer PostGIS ST_DWithin() server-side
+→ Resultata vert returnert sortert etter avstand
+→ Frontend viser markørar, sirkel og resultatliste
+```
+
+#### SQL-funksjon i Supabase (PostGIS)
+
+```sql
+-- PostGIS RPC: Finn AED-ar i nærleiken med ST_DWithin
+CREATE OR REPLACE FUNCTION nearby_hjertestartere(
+  center_lat float,
+  center_lng float,
+  radius_km float
+)
+RETURNS TABLE (
+  id bigint,
+  asset_id bigint,
+  site_name text,
+  site_address text,
+  site_post_code text,
+  site_post_area text,
+  site_latitude float,
+  site_longitude float,
+  is_open boolean,
+  opening_hours_text text,
+  dist_km float
+)
+LANGUAGE sql
+AS $$
+  SELECT
+    id,
+    asset_id,
+    site_name,
+    site_address,
+    site_post_code,
+    site_post_area,
+    site_latitude,
+    site_longitude,
+    is_open,
+    opening_hours_text,
+    (ST_Distance(
+      location,
+      ST_SetSRID(ST_MakePoint(center_lng, center_lat), 4326)::geography
+    ) / 1000) AS dist_km
+  FROM hjertestartere
+  WHERE ST_DWithin(
+    location,
+    ST_SetSRID(ST_MakePoint(center_lng, center_lat), 4326)::geography,
+    radius_km * 1000
+  )
+  ORDER BY dist_km;
+$$;
+```
+
+**PostGIS-funksjonar brukt:**
+- `ST_DWithin(geom, point, distance)` — finn objekt innanfor ein avstand (sfærisk)
+- `ST_Distance(geom, point)` — berekn eksakt avstand i meter
+- `ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography` — lag geografi-punkt frå koordinatar
+
+#### Visuell feedback
+
+- **Klikk-markør** (📍 teal) med popup som viser koordinatar og radius
+- **Sirkel** (teal, stipla) som viser søkeradius
+- **Resultatkmarkørar** med kvit kant — grøn (åpen) / raud (stengt)
+- **Resultattabell** i sidepanelet med avstand frå klikk
+- **Toast-melding** med antal funne AED-ar og tid
+
+#### Demo
+
+> *Video/GIF kjem her*
+
+---
+
+### Notebook-guide
+
+Notebooken ligg i rotmappa til prosjektet:
+
+📓 **[analyse_beredskap.ipynb](analyse_beredskap.ipynb)**
+
+For å køyre notebooken:
+
+```bash
+# Installer avhengigheiter
+pip install -r requirements.txt
+
+# Start Jupyter
+jupyter notebook analyse_beredskap.ipynb
+```
+
+Eller opne i **VS Code** med Jupyter-utvidinga eller **Google Colab**.
+
+---
+
+**Sist oppdatert:** Mars 10, 2026
