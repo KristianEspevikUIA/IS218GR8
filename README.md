@@ -6,8 +6,7 @@ Eit interaktivt beredskapskart for Kristiansand-regionen knytt til **Totalforsva
 **Live:** `http://localhost:3000`
 
 ### Demo
-
-> *Video/GIF kjem her*
+#link til demo --- https://youtu.be/Ackwl4m9i5A
 
 ---
 
