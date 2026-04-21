@@ -1,0 +1,10 @@
+{
+"type": "FeatureCollection",
+"name": "brannstasjoner_cache",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "brannstasjon": "Kristiansand hovudstasjon", "category": "brannstasjon" }, "geometry": { "type": "Point", "coordinates": [ 8.0012, 58.1489 ] } },
+{ "type": "Feature", "properties": { "brannstasjon": "Flekkerøy brannstasjon", "category": "brannstasjon" }, "geometry": { "type": "Point", "coordinates": [ 7.955, 58.134 ] } },
+{ "type": "Feature", "properties": { "brannstasjon": "Tveit brannstasjon", "category": "brannstasjon" }, "geometry": { "type": "Point", "coordinates": [ 8.035, 58.198 ] } }
+]
+}
