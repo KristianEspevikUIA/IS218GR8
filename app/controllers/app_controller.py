@@ -2,11 +2,15 @@
 AppController.py - Main application controller
 Orchestrates initialization and overall application flow.
 Now supports DYNAMIC data serving — no more frozen Folium HTML.
+
+Semesterprosjekt (Oppgave 4): les inn pre-computed dekningsgap-lag
+frå app/data/coverage/ og server dei via /api/coverage/* endepunkt.
 """
 import json
 import os
 import hashlib
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from app.models.map_model import MapModel
 from app.models.data_model import DataModel
@@ -31,6 +35,10 @@ class AppController:
         self.data_model = DataModel()
         self.geojson_data = None
         self._local_features = []
+        # Semesterprosjekt: pre-computed coverage-lag
+        self._coverage_dir = Path(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))) / "data" / "coverage"
+        self._coverage_cache: Dict[str, Dict] = {}
 
     def initialize(self):
         """Initialize data sources (called once at startup)"""
@@ -206,3 +214,68 @@ class AppController:
 
     def save_map(self, filepath: str):
         print(f"⚠ save_map() no longer applicable with dynamic Leaflet.js frontend")
+
+    # ═══════════════════════════════════════════════════════════
+    #  Semesterprosjekt — Dekningsgap-analyse (Oppgåve 4)
+    # ═══════════════════════════════════════════════════════════
+    def get_coverage_layer(self, name: str) -> Dict:
+        """
+        Les inn eit pre-computed coverage-lag frå app/data/coverage/<name>.geojson.
+        Resultata vert cacha i minnet mellom førespurnadar.
+
+        Godkjende namn: service_areas, coverage_gaps, risk_grid,
+                        recommendations, population.
+        """
+        ALLOWED = {"service_areas", "coverage_gaps", "risk_grid",
+                   "recommendations", "population"}
+        if name not in ALLOWED:
+            return {"type": "FeatureCollection", "features": []}
+
+        if name in self._coverage_cache:
+            return self._coverage_cache[name]
+
+        path = self._coverage_dir / f"{name}.geojson"
+        if not path.exists():
+            print(f"[COVERAGE] ⚠ Manglar {path.name} — køyr run_coverage_analysis.py")
+            return {"type": "FeatureCollection", "features": []}
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self._coverage_cache[name] = data
+            print(f"[COVERAGE] ✓ Lasta {path.name} "
+                  f"({len(data.get('features', []))} features)")
+            return data
+        except Exception as e:
+            print(f"[COVERAGE] ✗ Kunne ikkje lese {path.name}: {e}")
+            return {"type": "FeatureCollection", "features": []}
+
+    def coverage_summary(self) -> Dict:
+        """
+        Rekn ut nøkkeltall for dekningsstatus — brukast i sidepanel/dashboard.
+        """
+        risk = self.get_coverage_layer("risk_grid")
+        recs = self.get_coverage_layer("recommendations")
+        gaps = self.get_coverage_layer("coverage_gaps")
+
+        feats = risk.get("features", [])
+        total_pop = sum(f["properties"].get("population", 0) for f in feats)
+        covered = sum(
+            f["properties"].get("population", 0) * f["properties"].get("coverage_frac", 0)
+            for f in feats
+        )
+        uncovered = total_pop - covered
+        class_counts: Dict[str, int] = {}
+        for f in feats:
+            c = f["properties"].get("risk_class", "ingen")
+            class_counts[c] = class_counts.get(c, 0) + 1
+
+        return {
+            "total_population": round(total_pop, 0),
+            "covered_population": round(covered, 0),
+            "uncovered_population": round(uncovered, 0),
+            "coverage_pct": round(100 * covered / total_pop, 1) if total_pop else 0,
+            "risk_class_counts": class_counts,
+            "n_recommendations": len(recs.get("features", [])),
+            "n_gap_polygons": len(gaps.get("features", [])),
+        }

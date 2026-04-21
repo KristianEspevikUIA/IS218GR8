@@ -1,0 +1,22 @@
+{
+"type": "FeatureCollection",
+"name": "aeds_cache",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "site_name": "Torvet", "is_available": true, "category": "aed", "asset_id": "DUMMY-000" }, "geometry": { "type": "Point", "coordinates": [ 8.0058, 58.1469 ] } },
+{ "type": "Feature", "properties": { "site_name": "Rådhuset", "is_available": true, "category": "aed", "asset_id": "DUMMY-001" }, "geometry": { "type": "Point", "coordinates": [ 8.0107, 58.1502 ] } },
+{ "type": "Feature", "properties": { "site_name": "Lund senter", "is_available": true, "category": "aed", "asset_id": "DUMMY-002" }, "geometry": { "type": "Point", "coordinates": [ 8.0234, 58.1549 ] } },
+{ "type": "Feature", "properties": { "site_name": "Vågsbygd senter", "is_available": true, "category": "aed", "asset_id": "DUMMY-003" }, "geometry": { "type": "Point", "coordinates": [ 7.9483, 58.1291 ] } },
+{ "type": "Feature", "properties": { "site_name": "Tinnheia", "is_available": true, "category": "aed", "asset_id": "DUMMY-004" }, "geometry": { "type": "Point", "coordinates": [ 7.9822, 58.1684 ] } },
+{ "type": "Feature", "properties": { "site_name": "Sørlandssenteret", "is_available": true, "category": "aed", "asset_id": "DUMMY-005" }, "geometry": { "type": "Point", "coordinates": [ 8.081, 58.1467 ] } },
+{ "type": "Feature", "properties": { "site_name": "Tveit", "is_available": true, "category": "aed", "asset_id": "DUMMY-006" }, "geometry": { "type": "Point", "coordinates": [ 8.039, 58.2015 ] } },
+{ "type": "Feature", "properties": { "site_name": "Justvik", "is_available": true, "category": "aed", "asset_id": "DUMMY-007" }, "geometry": { "type": "Point", "coordinates": [ 8.053, 58.1843 ] } },
+{ "type": "Feature", "properties": { "site_name": "Gimlemoen", "is_available": true, "category": "aed", "asset_id": "DUMMY-008" }, "geometry": { "type": "Point", "coordinates": [ 7.9935, 58.1388 ] } },
+{ "type": "Feature", "properties": { "site_name": "Kvadraturen", "is_available": true, "category": "aed", "asset_id": "DUMMY-009" }, "geometry": { "type": "Point", "coordinates": [ 8.0061, 58.1556 ] } },
+{ "type": "Feature", "properties": { "site_name": "Eg sjukehus", "is_available": true, "category": "aed", "asset_id": "DUMMY-010" }, "geometry": { "type": "Point", "coordinates": [ 8.0142, 58.1362 ] } },
+{ "type": "Feature", "properties": { "site_name": "Fiskaaveien", "is_available": true, "category": "aed", "asset_id": "DUMMY-011" }, "geometry": { "type": "Point", "coordinates": [ 7.979, 58.143 ] } },
+{ "type": "Feature", "properties": { "site_name": "Hånes", "is_available": true, "category": "aed", "asset_id": "DUMMY-012" }, "geometry": { "type": "Point", "coordinates": [ 8.051, 58.172 ] } },
+{ "type": "Feature", "properties": { "site_name": "Randesund", "is_available": true, "category": "aed", "asset_id": "DUMMY-013" }, "geometry": { "type": "Point", "coordinates": [ 8.099, 58.124 ] } },
+{ "type": "Feature", "properties": { "site_name": "Flekkeroy", "is_available": true, "category": "aed", "asset_id": "DUMMY-014" }, "geometry": { "type": "Point", "coordinates": [ 7.953, 58.157 ] } }
+]
+}

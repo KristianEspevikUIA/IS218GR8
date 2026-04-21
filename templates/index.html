@@ -111,6 +111,28 @@
             #app { flex-direction: column; }
             #controls { width: 100%; max-height: 30vh; }
         }
+        /* Semesterprosjekt — Dekningsgap */
+        #coverage-panel { background: #0f1429; border: 1px solid #533483; border-radius: 6px;
+                          padding: 10px; font-size: 12px; color: #eee; }
+        #coverage-panel h4 { color: #fff; background: #533483; }
+        .cov-toggle { display: flex; align-items: center; gap: 6px; padding: 3px 0;
+                      font-size: 12px; cursor: pointer; }
+        .cov-toggle input { cursor: pointer; }
+        .cov-swatch { display: inline-block; width: 14px; height: 14px;
+                      border-radius: 2px; border: 1px solid rgba(255,255,255,.2); }
+        .cov-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+                     margin: 8px 0; padding: 6px; background: #1a1a2e; border-radius: 4px; }
+        .cov-stats .stat { font-size: 11px; }
+        .cov-stats .stat b { display: block; color: #e94560; font-size: 15px; font-weight: 700; }
+        .risk-legend { display: flex; gap: 4px; margin-top: 4px; font-size: 10px; flex-wrap: wrap; }
+        .risk-legend span { padding: 1px 5px; border-radius: 3px; color: #fff; font-weight: 600; }
+        .rec-marker {
+            background: #8e24aa; color: #fff; border: 2px solid #fff;
+            border-radius: 50%; width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 13px;
+            box-shadow: 0 2px 6px rgba(0,0,0,.4);
+        }
     </style>
 </head>
 <body>
@@ -153,6 +175,55 @@
                 <h5 style="margin:0 0 6px;color:#009688;font-size:14px">📊 PostGIS-resultat</h5>
                 <p id="postgis-summary"></p>
                 <div id="postgis-list" style="max-height:150px;overflow-y:auto;font-size:12px"></div>
+            </div>
+
+            <!-- ═══ Semesterprosjekt: Dekningsgap-analyse ═══ -->
+            <div id="coverage-panel">
+                <h4>📊 Dekningsgap-analyse (Oppg. 4)</h4>
+                <p style="font-size:11px;color:#aaa;margin:4px 0">
+                    Analyse av AED-dekning, risikoscore per 250m-rute og anbefalte nye plasseringar.
+                </p>
+
+                <div class="cov-stats" id="coverage-stats">
+                    <div class="stat">Total befolkning<b id="stat-total">—</b></div>
+                    <div class="stat">AED-dekning<b id="stat-cov">—</b></div>
+                    <div class="stat">Utan dekning<b id="stat-uncov">—</b></div>
+                    <div class="stat">Anbefalte AED<b id="stat-recs">—</b></div>
+                </div>
+
+                <label class="cov-toggle">
+                    <input type="checkbox" id="tog-risk" onchange="toggleCoverageLayer('risk', this.checked)">
+                    <span class="cov-swatch" style="background:linear-gradient(90deg,#fff3b0,#e63946)"></span>
+                    Risikoscore (koroplett 250m)
+                </label>
+                <div class="risk-legend" style="margin-left:22px">
+                    <span style="background:#d0d0d0">ingen</span>
+                    <span style="background:#fee08b;color:#333">låg</span>
+                    <span style="background:#fdae61">moderat</span>
+                    <span style="background:#f46d43">høg</span>
+                    <span style="background:#a50026">kritisk</span>
+                </div>
+
+                <label class="cov-toggle">
+                    <input type="checkbox" id="tog-gaps" onchange="toggleCoverageLayer('gaps', this.checked)">
+                    <span class="cov-swatch" style="background:rgba(231,76,60,.4);border:1px dashed #e74c3c"></span>
+                    Dekningsgap (AED &gt; 400m)
+                </label>
+
+                <label class="cov-toggle">
+                    <input type="checkbox" id="tog-services" onchange="toggleCoverageLayer('services', this.checked)">
+                    <span class="cov-swatch" style="background:rgba(39,174,96,.3);border:1px solid #27ae60"></span>
+                    Service areas (buffer)
+                </label>
+
+                <label class="cov-toggle">
+                    <input type="checkbox" id="tog-recs" checked onchange="toggleCoverageLayer('recs', this.checked)">
+                    <span class="cov-swatch" style="background:#8e24aa"></span>
+                    Anbefalte nye AED (top 10)
+                </label>
+
+                <button class="btn btn-blue" style="margin-top:6px;padding:6px;font-size:12px;width:100%"
+                        onclick="loadCoverageLayers(true)">🔄 Last analyse</button>
             </div>
 
             <button class="btn btn-green" onclick="refreshData()">🔄 Oppdater data</button>
@@ -787,9 +858,193 @@
     }
 
     // ═══════════════════════════════════════════════════
+    //  Semesterprosjekt — Dekningsgap-analyse (Oppgave 4)
+    // ═══════════════════════════════════════════════════
+    // Layer groups for analyseresultat — delte med Leaflet overlay control
+    const coverageLayers = {
+        risk:     L.layerGroup(),
+        gaps:     L.layerGroup(),
+        services: L.layerGroup(),
+        recs:     L.layerGroup(),
+    };
+    const coverageLoaded = { risk: false, gaps: false, services: false, recs: false };
+
+    // Legg til i overlay-control slik at dei kan skruast av/på
+    L.control.layers(null, {
+        "🎨 Risikoscore (koroplett)": coverageLayers.risk,
+        "🚫 Dekningsgap":             coverageLayers.gaps,
+        "🟢 Service areas":           coverageLayers.services,
+        "💡 Anbefalte AED":           coverageLayers.recs,
+    }, { position: 'topright' }).addTo(map);
+
+    // Fargepalett for risk_class
+    const RISK_COLORS = {
+        'ingen':    '#d0d0d0',
+        'låg':      '#fee08b',
+        'moderat':  '#fdae61',
+        'høg':      '#f46d43',
+        'kritisk':  '#a50026',
+    };
+
+    function styleRiskCell(feature) {
+        const cls = feature.properties.risk_class || 'ingen';
+        return {
+            fillColor: RISK_COLORS[cls] || '#ccc',
+            color: '#333',
+            weight: 0.3,
+            fillOpacity: cls === 'ingen' ? 0.0 : 0.55,
+        };
+    }
+
+    async function fetchCoverage(name) {
+        const r = await fetch(`/api/coverage/${name}`, { cache: 'no-store' });
+        if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
+        return r.json();
+    }
+
+    async function loadCoverageSummary() {
+        try {
+            const r = await fetch('/api/coverage/summary', { cache: 'no-store' });
+            const { data } = await r.json();
+            if (!data) return;
+            document.getElementById('stat-total').textContent =
+                Number(data.total_population).toLocaleString('nb-NO');
+            document.getElementById('stat-cov').textContent =
+                data.coverage_pct.toFixed(1) + '%';
+            document.getElementById('stat-uncov').textContent =
+                Number(data.uncovered_population).toLocaleString('nb-NO');
+            document.getElementById('stat-recs').textContent = data.n_recommendations;
+        } catch (err) {
+            console.warn('[COVERAGE] summary failed:', err);
+        }
+    }
+
+    async function loadCoverageLayers(forceReload = false) {
+        showToast('Lastar dekningsgap-analyse…', 'info');
+        try {
+            // Risk grid (koroplett) — filtrer bort 'ingen' for ytelse
+            if (!coverageLoaded.risk || forceReload) {
+                coverageLayers.risk.clearLayers();
+                const risk = await fetchCoverage('risk-grid');
+                const visibleFeats = (risk.features || []).filter(
+                    f => (f.properties.risk_class || 'ingen') !== 'ingen'
+                );
+                L.geoJSON({ type: 'FeatureCollection', features: visibleFeats }, {
+                    style: styleRiskCell,
+                    onEachFeature: (feat, layer) => {
+                        const p = feat.properties;
+                        layer.bindPopup(
+                            `<b>Celle ${p.cell_id}</b><br>` +
+                            `Befolkning: <b>${Math.round(p.population)}</b><br>` +
+                            `AED-dekning: <b>${(100*p.coverage_frac).toFixed(0)}%</b><br>` +
+                            `Risikoscore: <b>${p.risk_score.toFixed(1)}</b> ` +
+                            `<span style="padding:1px 4px;border-radius:3px;color:#fff;` +
+                            `background:${RISK_COLORS[p.risk_class]}">${p.risk_class}</span>`
+                        );
+                    }
+                }).addTo(coverageLayers.risk);
+                coverageLoaded.risk = true;
+            }
+
+            // Coverage gaps — dekningsgap-polygonar
+            if (!coverageLoaded.gaps || forceReload) {
+                coverageLayers.gaps.clearLayers();
+                const gaps = await fetchCoverage('gaps');
+                L.geoJSON(gaps, {
+                    style: {
+                        color: '#e74c3c', weight: 2, dashArray: '5,4',
+                        fillColor: '#e74c3c', fillOpacity: 0.15
+                    },
+                    onEachFeature: (feat, layer) => {
+                        const area = (feat.properties.area_m2 || 0) / 1e6;
+                        layer.bindPopup(
+                            `<b>🚫 Dekningsgap</b><br>Areal: ${area.toFixed(2)} km²`
+                        );
+                    }
+                }).addTo(coverageLayers.gaps);
+                coverageLoaded.gaps = true;
+            }
+
+            // Service areas — buffer polygonar
+            if (!coverageLoaded.services || forceReload) {
+                coverageLayers.services.clearLayers();
+                const sa = await fetchCoverage('service-areas');
+                L.geoJSON(sa, {
+                    style: feat => ({
+                        color: feat.properties.resource_type === 'aed' ? '#27ae60' : '#0f3460',
+                        weight: 1,
+                        fillColor: feat.properties.resource_type === 'aed' ? '#27ae60' : '#0f3460',
+                        fillOpacity: 0.08
+                    }),
+                    onEachFeature: (feat, layer) => {
+                        const p = feat.properties;
+                        layer.bindPopup(
+                            `<b>${p.resource_type}</b> — ${p.resource_name}<br>` +
+                            `Radius: ${p.radius_m} m`
+                        );
+                    }
+                }).addTo(coverageLayers.services);
+                coverageLoaded.services = true;
+            }
+
+            // Recommendations — nummererte markørar
+            if (!coverageLoaded.recs || forceReload) {
+                coverageLayers.recs.clearLayers();
+                const recs = await fetchCoverage('recommendations');
+                (recs.features || []).forEach(feat => {
+                    const [lng, lat] = feat.geometry.coordinates;
+                    const p = feat.properties;
+                    const icon = L.divIcon({
+                        className: '',
+                        html: `<div class="rec-marker">${p.rank}</div>`,
+                        iconSize: [28, 28],
+                        iconAnchor: [14, 14]
+                    });
+                    const m = L.marker([lat, lng], { icon, zIndexOffset: 1000 });
+                    m.bindPopup(
+                        `<b>Anbefaling #${p.rank}</b><br>` +
+                        `Dekker <b>${p.population_covered}</b> personar (≤400m)<br>` +
+                        `<small>Celle: ${p.cell_id}</small>`
+                    );
+                    m.bindTooltip(`#${p.rank}: dekker ${p.population_covered} pers`);
+                    coverageLayers.recs.addLayer(m);
+                });
+                coverageLoaded.recs = true;
+            }
+
+            await loadCoverageSummary();
+            showToast('Dekningsgap-analyse lasta', 'success');
+        } catch (err) {
+            showToast('Feil ved lasting av analyse: ' + err.message, 'error');
+            console.error(err);
+        }
+    }
+
+    function toggleCoverageLayer(key, show) {
+        const layer = coverageLayers[key];
+        if (!layer) return;
+        // Last inn om nødvendig
+        if (show && !coverageLoaded[key]) {
+            loadCoverageLayers().then(() => {
+                if (show) map.addLayer(layer);
+            });
+            return;
+        }
+        if (show) map.addLayer(layer);
+        else     map.removeLayer(layer);
+    }
+
+    // ═══════════════════════════════════════════════════
     //  Init
     // ═══════════════════════════════════════════════════
-    window.addEventListener('load', () => loadLayers());
+    window.addEventListener('load', async () => {
+        await loadLayers();
+        // Hent coverage-summary umiddelbart (billig), last anbefalingar
+        await loadCoverageSummary();
+        await loadCoverageLayers();
+        // Standard: vis anbefalingar
+        map.addLayer(coverageLayers.recs);
+    });
     </script>
 </body>
 </html>

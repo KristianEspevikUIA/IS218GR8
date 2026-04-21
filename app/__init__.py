@@ -3,6 +3,7 @@ Flask Web Application for Interactive Web Map
 MVC Architecture with Leaflet.js dynamic frontend + Supabase REST backend
 """
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify
 from app.controllers.app_controller import AppController
@@ -263,6 +264,50 @@ def get_available_aeds_count():
         return jsonify({'status': 'success', 'count': len(aeds)})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
+
+
+# ==================== SEMESTERPROSJEKT: DEKNINGSGAP ====================
+# Oppgave 4 — Totalforsvaret 2025–2026
+# Serverar pre-computed lag frå app/data/coverage/ + dashboard-oppsummering.
+
+@app.route('/api/coverage/service-areas')
+def coverage_service_areas():
+    """Buffersoner rundt AED, brannstasjon, sjukehus (GeoJSON, UTM32N → WGS84)"""
+    return jsonify(controller.get_coverage_layer('service_areas'))
+
+
+@app.route('/api/coverage/gaps')
+def coverage_gaps_endpoint():
+    """Dekningsgap-polygonar: befolka område utan AED innan 400m."""
+    return jsonify(controller.get_coverage_layer('coverage_gaps'))
+
+
+@app.route('/api/coverage/risk-grid')
+def coverage_risk_grid():
+    """250m rutenett med population, coverage_frac, risk_score, risk_class."""
+    return jsonify(controller.get_coverage_layer('risk_grid'))
+
+
+@app.route('/api/coverage/recommendations')
+def coverage_recommendations():
+    """Topp-N anbefalte nye AED-plasseringar (grådig algoritme)."""
+    return jsonify(controller.get_coverage_layer('recommendations'))
+
+
+@app.route('/api/coverage/population')
+def coverage_population():
+    """Befolkningsrutenett (250m) — kalibrert modell over kommunen."""
+    return jsonify(controller.get_coverage_layer('population'))
+
+
+@app.route('/api/coverage/summary')
+def coverage_summary():
+    """Statistikk for sidepanel: total befolkning, dekningsandel, klasser."""
+    return jsonify({
+        'status': 'success',
+        'data': controller.coverage_summary(),
+        'generated_at': datetime.now().isoformat(),
+    })
 
 
 if __name__ == '__main__':

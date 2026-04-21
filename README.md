@@ -415,4 +415,96 @@ Eller opne i **VS Code** med Jupyter-utvidinga eller **Google Colab**.
 
 ---
 
-**Sist oppdatert:** Mars 10, 2026
+## Oppgåve 4 — Semesterprosjekt: Dekningsgap-analyse
+
+### TL;DR
+
+Ei full romleg analyseløysing som bygger vidare på oppg. 1–2 og identifiserer område
+i Kristiansand som manglar AED-dekning, reknar ut ein risikoscore per 250 m-celle, og
+foreslår optimale plasseringar for nye hjertestarterar via ein grådig algoritme. Analysen
+er tett kopla med webkartet frå oppgave 1 — alle resultat vert servert via nye
+Flask-endepunkt og rendra live i Leaflet-frontenden.
+
+📄 **Rapport:** [semesterrapport.pdf](semesterrapport.pdf) (12 sider)
+📓 **Notebook:** [dekningsgap_analyse.ipynb](dekningsgap_analyse.ipynb) (32 celler, 17 kodeceller)
+📚 **Samla mapperapport:** [mapperapport_samlet.pdf](mapperapport_samlet.pdf) (18 sider)
+
+### Problemstilling
+
+> *Korleis kan vi identifisere og visualisere sårbare område i Kristiansand med
+> mangelfull beredskapsdekning i eit totalforsvarsscenario, og foreslå optimale
+> plasseringar for nye beredskapsressursar?*
+
+### Analysepipeline
+
+1. **Service areas** — buffer 400 m rundt kvar AED (`coverage_model.service_areas`)
+2. **Dekningsgap** — overlay-difference mellom kommunen og AED-bufferunion (avleidd datasett)
+3. **Befolkningsmodell** — 250 m rutenett med distance-decay frå 9 bydelssentrum, kalibrert til 115 000 (SSB 2024)
+4. **Risikoscore** — `population × (1 − coverage_frac)` per celle, klassifisert i fem klasser
+5. **Anbefalingar** — grådig algoritme vel 10 nye AED-plasseringar som maksimerer dekning
+
+### Nye filer
+
+```
+app/models/coverage_model.py        # Felles analyse-pipeline (notebook + Flask)
+app/data/coverage/*.geojson         # Pre-computed resultat-lag (5 filer)
+app/data/befolkning_kristiansand.geojson   # 250 m rutenett
+app/data/kristiansand_kommune.geojson      # Kommunegrense
+app/data/aeds_cache.geojson                # Cache av Hjertestarter-registeret
+app/data/brannstasjoner_cache.geojson      # Cache av GeoNorge WFS
+dekningsgap_analyse.ipynb           # Full analyse-notebook
+build_notebook.py                   # Byggjer notebook programmatisk
+run_coverage_analysis.py            # Køyr heile pipeline, skriv GeoJSON-lag
+generate_population_grid.py         # Byggjer befolkningsmodell + kommunegrense
+generate_figures.py                 # Matplotlib-figurar til rapport
+build_report.js                     # docx-generator (semesterrapport)
+build_mapperapport.js               # docx-generator (mapperapport forside)
+static/figures/*.png                # 7 rapport-figurar
+semesterrapport.pdf                 # Endeleg PDF (12 sider)
+mapperapport_samlet.pdf             # Samla mapperapport-PDF (18 sider)
+```
+
+### Nye API-endepunkt (Oppg. 4)
+
+| Endepunkt | Innhald |
+|-----------|---------|
+| `GET /api/coverage/service-areas`  | Buffersoner rundt AED, brannstasjon, sjukehus |
+| `GET /api/coverage/gaps`           | Dekningsgap-polygon (avleidd datasett) |
+| `GET /api/coverage/risk-grid`      | 250 m risiko-koroplett |
+| `GET /api/coverage/recommendations` | Topp-10 anbefalte nye AED-plasseringar |
+| `GET /api/coverage/population`     | Befolkningsrutenett |
+| `GET /api/coverage/summary`        | Nøkkeltal for sidepanel |
+
+### Køyr semesterprosjektet
+
+```bash
+# Generer input-data (éin gong)
+python generate_population_grid.py
+
+# Køyr heile analyse-pipelinen → skriv app/data/coverage/*.geojson
+python run_coverage_analysis.py
+
+# Start Flask — nye lag vert servert dynamisk frå /api/coverage/*
+python run.py
+
+# Opne notebook for full analyse ende-til-ende
+jupyter notebook dekningsgap_analyse.ipynb
+```
+
+### Rapportfigurar
+
+Alle sju figurar i semesterrapporten er genererte direkte frå pipelinen:
+
+| Fil | Innhald |
+|-----|---------|
+| `static/figures/01_oversikt_ressursar.png` | Oversikt alle ressursar |
+| `static/figures/02_befolkning_250m.png`    | Befolkningsrutenett |
+| `static/figures/03_service_areas.png`      | AED-buffersoner |
+| `static/figures/04_coverage_gaps.png`      | Dekningsgap |
+| `static/figures/05_risk_grid.png`          | Risiko-koroplett |
+| `static/figures/06_recommendations.png`    | Anbefalte plasseringar |
+| `static/figures/07_before_after.png`       | Før/etter-samanlikning |
+
+---
+
+**Sist oppdatert:** April 21, 2026
