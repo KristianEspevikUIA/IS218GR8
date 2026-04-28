@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="nn">
+<head>
+<meta charset="UTF-8">
+<title>Beredskapskart Kristiansand — Expo handout</title>
+<style>
+  @page { size: A4; margin: 12mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1F2937; line-height: 1.45; font-size: 10.5pt; }
+  .page { width: 186mm; min-height: 273mm; }
+
+  header {
+    background: linear-gradient(135deg, #1F2937 0%, #2E75B6 100%);
+    color: white; padding: 14px 20px; border-radius: 8px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  header h1 { font-size: 22pt; margin: 0; line-height: 1.1; }
+  header .tagline { font-size: 11pt; opacity: 0.92; margin-top: 4px; }
+  header .group { text-align: right; font-size: 10pt; }
+  header .group strong { display: block; font-size: 14pt; }
+
+  section { margin-top: 14px; }
+  h2 { color: #2E75B6; font-size: 12pt; margin-bottom: 6px; border-bottom: 2px solid #2E75B6; padding-bottom: 2px; }
+
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .stat { background: #F3F4F6; padding: 10px 12px; border-radius: 6px; border-left: 4px solid #2E75B6; }
+  .stat .num { font-size: 22pt; font-weight: 700; color: #1F2937; line-height: 1; }
+  .stat .lbl { font-size: 9pt; color: #4B5563; margin-top: 4px; }
+
+  .row { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; align-items: start; }
+  .col-text p { margin-bottom: 6px; }
+  .qr-box { text-align: center; }
+  .qr-box img { width: 110px; height: 110px; border: 1px solid #ddd; padding: 4px; background: white; }
+  .qr-box .qr-lbl { font-size: 8.5pt; color: #4B5563; margin-top: 4px; }
+
+  table.coverage { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 9.5pt; }
+  table.coverage th { background: #2E75B6; color: white; padding: 5px 8px; text-align: left; }
+  table.coverage td { padding: 5px 8px; border-bottom: 1px solid #E5E7EB; }
+  table.coverage tr:nth-child(even) td { background: #F9FAFB; }
+  .pct { font-weight: 700; color: #1F2937; }
+
+  .why-what-how { background: #FEF3C7; padding: 10px 12px; border-radius: 6px; border-left: 4px solid #F59E0B; }
+  .why-what-how strong { color: #92400E; }
+
+  .stack { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .chip { background: #E5E7EB; padding: 2px 8px; border-radius: 12px; font-size: 8.5pt; color: #374151; }
+
+  ol.demo-steps { margin-left: 18px; }
+  ol.demo-steps li { margin-bottom: 3px; }
+
+  footer {
+    margin-top: 14px; padding-top: 10px; border-top: 1px solid #E5E7EB;
+    display: flex; justify-content: space-between; font-size: 8.5pt; color: #6B7280;
+  }
+  .repo { color: #2E75B6; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <div>
+    <h1>Beredskapskart Kristiansand</h1>
+    <div class="tagline">Kvar manglar hjertestartarane når sekundene tel?</div>
+  </div>
+  <div class="group">
+    <strong>Gruppe 8</strong>
+    IS-218 · UiA · Vår 2026<br>
+    Totalforsvaret 2025–2026
+  </div>
+</header>
+
+<section class="why-what-how">
+  <p><strong>KVIFOR.</strong> Kvart minutt utan defibrillering senker overlevinga ved hjertestans med ca. 10%.
+  Beredskap er eit geografisk problem — men dagens kart viser berre kor ressursane ER, ikkje kor dei MANGLAR.</p>
+  <p><strong>KVA.</strong> Vi har bygd eit interaktivt webkart som identifiserer dekningshol i Kristiansand
+  og foreslår optimale plasseringar for nye AED-ar via romleg analyse.</p>
+  <p><strong>KORLEIS.</strong> Vi kombinerer Hjertestarterregisteret (live API), GeoNorge WFS, befolkningsrutenett
+  og PostGIS — og brukar ein grådig algoritme for å maksimere folkedekninga.</p>
+</section>
+
+<section>
+  <h2>Tre nøkkeltal</h2>
+  <div class="grid-3">
+    <div class="stat">
+      <div class="num">115 000</div>
+      <div class="lbl">Innbyggjarar kartlagt på 250m-rutenett</div>
+    </div>
+    <div class="stat">
+      <div class="num">10</div>
+      <div class="lbl">Nye AED-plasseringar foreslått av algoritmen</div>
+    </div>
+    <div class="stat">
+      <div class="num">7</div>
+      <div class="lbl">REST-endepunkt + 4 kartlag rendra live i Leaflet</div>
+    </div>
+  </div>
+</section>
+
+<div class="row">
+  <div class="col-text">
+    <section>
+      <h2>Slik ser dekninga ut i dag</h2>
+      <p style="font-size:9.5pt;color:#4B5563;">Med dei sentrale åpne AED-ane som er tilgjengelege for publikum 24/7:</p>
+      <table class="coverage">
+        <tr><th>Gangavstand</th><th>Tid (≈)</th><th>Dekka befolkning</th></tr>
+        <tr><td>200 m</td><td>2–3 min</td><td><span class="pct">~1 %</span></td></tr>
+        <tr><td>400 m</td><td>5 min</td><td><span class="pct">~6 %</span></td></tr>
+        <tr><td>800 m</td><td>10 min</td><td><span class="pct">~21 %</span></td></tr>
+        <tr><td>1 500 m</td><td>20 min</td><td><span class="pct">~52 %</span></td></tr>
+      </table>
+      <p style="font-size:8.5pt;color:#6B7280;margin-top:4px;font-style:italic;">
+      Tal basert på 5 publikumstilgjengelege AED-ar i analysen. Det totale registeret har fleire,
+      men mange er bedriftsinterne og ikkje opne 24/7. Algoritmen vår viser kvar 10 nye, strategisk
+      plasserte AED-ar gjev størst forbetring.</p>
+    </section>
+
+    <section>
+      <h2>Teknologi</h2>
+      <div class="stack">
+        <span class="chip">Python 3.11</span>
+        <span class="chip">Flask · MVC</span>
+        <span class="chip">GeoPandas</span>
+        <span class="chip">Shapely</span>
+        <span class="chip">Supabase PostGIS</span>
+        <span class="chip">Leaflet.js</span>
+        <span class="chip">DuckDB</span>
+        <span class="chip">OGC WFS 2.0</span>
+        <span class="chip">OAuth 2.0</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Kva juryen ser</h2>
+      <ol class="demo-steps">
+        <li><strong>Klikk "Finn nærmaste AED"</strong> — OSRM-rutenavigering på gangveg.</li>
+        <li><strong>Aktiver PostGIS-modus</strong> — koordinatane går til Supabase, ST_DWithin gjev resultat.</li>
+        <li><strong>Vis dekningsgap-laget</strong> — raude polygon = sårbare område utan AED innan 400 m.</li>
+        <li><strong>Vis topp-10 anbefalingar</strong> — grådig algoritme på 250m risikorutenett.</li>
+      </ol>
+    </section>
+  </div>
+
+  <div class="qr-box">
+    <img src="qr_repo.png" alt="QR-kode til repo">
+    <div class="qr-lbl"><strong>Skann for repo</strong><br>
+    github.com/<br>KristianEspevikUIA/<br>IS218GR8</div>
+  </div>
+</div>
+
+<footer>
+  <div>
+    <strong>Kristian Espevik</strong> · Victor Ziadpour · Nicolai Stephansen · Brage Kristoffersen · Amged Mohammed · Youcef Youcef
+  </div>
+  <div>Repo: <span class="repo">github.com/KristianEspevikUIA/IS218GR8</span></div>
+</footer>
+
+</div>
+</body>
+</html>
