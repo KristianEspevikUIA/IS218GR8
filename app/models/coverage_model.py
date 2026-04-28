@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -69,7 +70,23 @@ def _to_geojson(gdf: gpd.GeoDataFrame) -> Dict:
         return {"type": "FeatureCollection", "features": []}
     # Sikre WGS84 ved serialisering
     gdf = gdf.to_crs(WGS84) if gdf.crs != WGS84 else gdf
-    return json.loads(gdf.to_json())
+    features = []
+    geom_col = gdf.geometry.name
+    for _, row in gdf.iterrows():
+        props = {}
+        for key, value in row.drop(labels=[geom_col]).items():
+            if pd.isna(value):
+                props[key] = None
+            elif isinstance(value, np.generic):
+                props[key] = value.item()
+            else:
+                props[key] = value
+        features.append({
+            "type": "Feature",
+            "properties": props,
+            "geometry": mapping(row.geometry),
+        })
+    return {"type": "FeatureCollection", "features": features}
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -320,7 +337,7 @@ def risk_grid(
             except Exception:
                 return 0.0
 
-        g["coverage_frac"] = g.geometry.apply(_cov_frac)
+        g["coverage_frac"] = [_cov_frac(geom) for geom in g.geometry]
 
     # ── 3. Risikoscore ─────────────────────────────────────────────
     g["risk_score"] = g["population"] * (1 - g["coverage_frac"])
@@ -418,19 +435,31 @@ def run_pipeline(
     boundary_gdf: gpd.GeoDataFrame,
     n_recommendations: int = 10,
     cell_size_m: float = DEFAULT_CELL_SIZE_M,
+    aed_availability_mode: str | None = None,
 ) -> Dict[str, Dict]:
     """
     Køyr heile dekningsgap-analysen og returner alle resultat som GeoJSON-dict.
     Brukast både av notebook og Flask-backend (ved runtime eller pre-computed).
     """
-    # Filtrer AED til åpne
     aeds_all = _to_gdf(aed_features)
-    if "is_available" in aeds_all.columns:
-        aeds = aeds_all[aeds_all["is_available"] == True].copy()
-    elif "is_open_status" in aeds_all.columns:
-        aeds = aeds_all[aeds_all["is_open_status"] == "Y"].copy()
+    aed_availability_mode = (
+        aed_availability_mode or os.getenv("AED_COVERAGE_MODE", "active")
+    ).lower().strip()
+
+    if aed_availability_mode in {"open", "open_now", "available"}:
+        if "is_available" in aeds_all.columns:
+            aeds = aeds_all[aeds_all["is_available"] == True].copy()
+        elif "is_open" in aeds_all.columns:
+            aeds = aeds_all[aeds_all["is_open"] == True].copy()
+        elif "is_open_status" in aeds_all.columns:
+            aeds = aeds_all[aeds_all["is_open_status"] == "Y"].copy()
+        else:
+            aeds = aeds_all.copy()
     else:
-        aeds = aeds_all.copy()
+        if "is_active" in aeds_all.columns:
+            aeds = aeds_all[aeds_all["is_active"] != False].copy()
+        else:
+            aeds = aeds_all.copy()
     aeds["category"] = "aed"
 
     brann = _to_gdf(brann_features)

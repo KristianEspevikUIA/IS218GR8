@@ -1,4 +1,4 @@
-"""
+﻿"""
 DataModel.py - Handles geographic data fetching and spatial operations
 Supports GeoJSON, OGC APIs (WFS), and PostGIS/Supabase via REST API (httpx)
 """
@@ -26,9 +26,9 @@ class SupabaseREST:
         self.ready = bool(self.url and self.key)
         if self.ready:
             ref = self.url.split('//')[1].split('.')[0] if '//' in self.url else '???'
-            print(f"✓ Supabase REST client ready (project={ref})")
+            print(f"OK Supabase REST client ready (project={ref})")
         else:
-            print("⚠ Supabase credentials not found in .env file")
+            print("WARN Supabase credentials not found in .env file")
 
     @property
     def _headers(self) -> dict:
@@ -64,10 +64,10 @@ class SupabaseREST:
             r = httpx.get(url, params=params, headers=self._headers, timeout=15.0)
             if r.status_code == 200:
                 return r.json()
-            print(f"⚠ Supabase SELECT {table}: {r.status_code} {r.text[:200]}")
+            print(f"WARN Supabase SELECT {table}: {r.status_code} {r.text[:200]}")
             return []
         except Exception as e:
-            print(f"⚠ Supabase SELECT {table} error: {e}")
+            print(f"WARN Supabase SELECT {table} error: {e}")
             return []
 
     # ── INSERT ──────────────────────────────────────────────
@@ -79,10 +79,10 @@ class SupabaseREST:
             if r.status_code in (200, 201):
                 rows = r.json()
                 return rows[0] if rows else {}
-            print(f"⚠ Supabase INSERT {table}: {r.status_code}")
+            print(f"WARN Supabase INSERT {table}: {r.status_code}")
             return {}
         except Exception as e:
-            print(f"⚠ Supabase INSERT {table} error: {e}")
+            print(f"WARN Supabase INSERT {table} error: {e}")
             return {}
 
     # ── UPDATE ──────────────────────────────────────────────
@@ -97,10 +97,10 @@ class SupabaseREST:
             if r.status_code in (200, 204):
                 rows = r.json() if r.text else []
                 return rows[0] if rows else {}
-            print(f"⚠ Supabase UPDATE {table}: {r.status_code}")
+            print(f"WARN Supabase UPDATE {table}: {r.status_code}")
             return {}
         except Exception as e:
-            print(f"⚠ Supabase UPDATE {table} error: {e}")
+            print(f"WARN Supabase UPDATE {table} error: {e}")
             return {}
 
     # ── DELETE ──────────────────────────────────────────────
@@ -114,7 +114,7 @@ class SupabaseREST:
             )
             return r.status_code in (200, 204)
         except Exception as e:
-            print(f"⚠ Supabase DELETE {table} error: {e}")
+            print(f"WARN Supabase DELETE {table} error: {e}")
             return False
 
     # ── RPC ─────────────────────────────────────────────────
@@ -128,10 +128,10 @@ class SupabaseREST:
             )
             if r.status_code == 200:
                 return r.json()
-            print(f"⚠ Supabase RPC {fn_name}: {r.status_code}")
+            print(f"WARN Supabase RPC {fn_name}: {r.status_code}")
             return []
         except Exception as e:
-            print(f"⚠ Supabase RPC {fn_name} error: {e}")
+            print(f"WARN Supabase RPC {fn_name} error: {e}")
             return []
 
 
@@ -167,19 +167,19 @@ class DataModel:
     def insert_supabase(self, table_name: str, data: Dict) -> Dict:
         result = self.sb.insert(table_name, data)
         if result:
-            print(f"✓ Data inserted into {table_name}")
+            print(f"OK Data inserted into {table_name}")
         return result
 
     def update_supabase(self, table_name: str, record_id: int, data: Dict) -> Dict:
         result = self.sb.update(table_name, record_id, data)
         if result:
-            print(f"✓ Data updated in {table_name}")
+            print(f"OK Data updated in {table_name}")
         return result
 
     def delete_supabase(self, table_name: str, record_id: int) -> bool:
         ok = self.sb.delete(table_name, record_id)
         if ok:
-            print(f"✓ Data deleted from {table_name}")
+            print(f"OK Data deleted from {table_name}")
         return ok
 
     # ═══════════════════════════════════════════════════════════
@@ -215,7 +215,7 @@ class DataModel:
                 return api.convert_to_geojson(response)
             return {"type": "FeatureCollection", "features": []}
         except Exception as e:
-            print(f"✗ Error fetching Hjertestarterregister data: {e}")
+            print(f"ERR Error fetching Hjertestarterregister data: {e}")
             return {"type": "FeatureCollection", "features": []}
 
     def get_available_aeds(self, latitude: float = None, longitude: float = None,
@@ -228,7 +228,7 @@ class DataModel:
             return api.search_available_aeds(latitude=latitude, longitude=longitude,
                                              distance=distance)
         except Exception as e:
-            print(f"✗ Error fetching available AEDs: {e}")
+            print(f"ERR Error fetching available AEDs: {e}")
             return []
 
     # ═══════════════════════════════════════════════════════════
@@ -243,6 +243,14 @@ class DataModel:
             lng = row.get('site_longitude')
             if lat is None or lng is None:
                 continue
+            open_status = self._first_present(
+                row, 'is_open_status', 'is_open', 'is_available', 'IS_OPEN'
+            )
+            active_status = self._first_present(
+                row, 'active', 'is_active', 'asset_status', 'ACTIVE'
+            )
+            is_open = self._truthy_status(open_status)
+            is_active = self._truthy_status(active_status, default=True)
             feature = {
                 "type": "Feature",
                 "geometry": {"type": "Point", "coordinates": [lng, lat]},
@@ -251,8 +259,10 @@ class DataModel:
                     "site_name": row.get('site_name', ''),
                     "site_address": row.get('site_address', ''),
                     "site_post_area": row.get('site_post_area', ''),
-                    "is_available": row.get('is_open', False),
-                    "is_open_status": 'Y' if row.get('is_open') else 'N',
+                    "is_available": is_open,
+                    "is_open": is_open,
+                    "is_active": is_active,
+                    "is_open_status": 'Y' if is_open else 'N',
                     "opening_hours_text": row.get('opening_hours_text', ''),
                     "distance_km": row.get('distance_km', 0),
                     "source": "supabase/hjertestartere"
@@ -267,6 +277,30 @@ class DataModel:
               f"count={len(features)}  first_5={ids_sorted[:5]}  checksum={checksum}")
 
         return {"type": "FeatureCollection", "features": features}
+
+    @staticmethod
+    def _first_present(row: Dict, *keys):
+        for key in keys:
+            value = row.get(key)
+            if value is not None and value != '':
+                return value
+        return None
+
+    @staticmethod
+    def _truthy_status(value, default: bool = False) -> bool:
+        """Normalize common API/database status values to bool."""
+        if value is None or value == '':
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        text = str(value).strip().lower()
+        if text in {'y', 'yes', 'true', '1', 'open', 'active', 'aktiv'}:
+            return True
+        if text in {'n', 'no', 'false', '0', 'closed', 'inactive', 'stengt'}:
+            return False
+        return default
 
     # ═══════════════════════════════════════════════════════════
     #  Places helpers
@@ -326,10 +360,10 @@ class DataModel:
             r = requests.get(wfs_url, params=params, timeout=15)
             r.raise_for_status()
             features = self._parse_brannstasjoner_gml(r.text)
-            print(f"[WFS] ✓ Parsed {len(features)} brannstasjoner from GML")
+            print(f"[WFS] OK Parsed {len(features)} brannstasjoner from GML")
             return {"type": "FeatureCollection", "features": features}
         except Exception as e:
-            print(f"[WFS] ✗ Error fetching brannstasjoner: {e}")
+            print(f"[WFS] ERR Error fetching brannstasjoner: {e}")
             return {"type": "FeatureCollection", "features": []}
 
     def _parse_brannstasjoner_gml(self, gml_text: str) -> List[Dict]:
