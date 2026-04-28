@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 """
 Main entry point for the Flask application
 Run this file to start the web map server
@@ -13,13 +13,13 @@ if __name__ == '__main__':
     print("Interactive Web Map - Python Flask + MVC")
     print("=" * 50)
     print()
-    print("✓ Starting Flask server on http://localhost:3000")
-    print("✓ Press Ctrl+C to stop the server")
+    print("OK Starting Flask server on http://localhost:3000")
+    print("OK Press Ctrl+C to stop the server")
     print()
     
     try:
         controller.initialize()
         app.run(debug=True, port=3000, use_reloader=False)
     except KeyboardInterrupt:
-        print("\n\n✓ Server stopped")
+        print("\n\nOK Server stopped")
         sys.exit(0)

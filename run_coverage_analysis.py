@@ -1,4 +1,4 @@
-"""
+﻿"""
 run_coverage_analysis.py
 
 Kjør dekningsgap-analysen for Kristiansand ved å kombinere:
@@ -32,16 +32,34 @@ DATA_DIR = BASE / "app" / "data"
 OUT_DIR = DATA_DIR / "coverage"
 
 
+def write_geojson(path: Path, layer_name: str, geojson: dict) -> None:
+    """Write GeoJSON in the same line-oriented style as the checked-in data."""
+    features = geojson.get("features", [])
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write("{\n")
+        f.write('"type": "FeatureCollection",\n')
+        f.write(f'"name": "{layer_name}",\n')
+        f.write('"crs": { "type": "name", "properties": { "name": '
+                '"urn:ogc:def:crs:OGC:1.3:CRS84" } },\n')
+        f.write('"features": [\n')
+        for idx, feat in enumerate(features):
+            comma = "," if idx < len(features) - 1 else ""
+            f.write(json.dumps(feat, ensure_ascii=False, separators=(", ", ": ")))
+            f.write(comma + "\n")
+        f.write("]\n")
+        f.write("}\n")
+
+
 def load_aeds() -> list:
     """
     Prøv å hente AED-ar i prioritert rekkefølge:
-      1. Cache-fil app/data/aeds_cache.geojson (om pipeline er køyrt før)
-      2. Supabase hjertestartere-tabell (om .env har credentials)
-      3. Live Hjertestarterregister API
+      1. Supabase hjertestartere-tabell (om .env har credentials)
+      2. Live Hjertestarterregister API
+      3. Cache-fil app/data/aeds_cache.geojson (offline fallback)
       4. Fallback: dummy datasett plassert i sentrum (slik at pipeline kan testast)
     """
     cache = DATA_DIR / "aeds_cache.geojson"
-    if cache.exists():
+    if os.getenv("AED_USE_CACHE", "").lower() in {"1", "true", "yes"} and cache.exists():
         print(f"[AED] Bruker cache: {cache}")
         with open(cache, encoding="utf-8") as f:
             return json.load(f).get("features", [])
@@ -73,6 +91,8 @@ def load_aeds() -> list:
                     for asset in resp["ASSETS"]:
                         if asset.get("ASSET_ID") == feat["properties"].get("asset_id"):
                             feat["properties"]["is_available"] = asset.get("IS_OPEN") == "Y"
+                            feat["properties"]["is_open"] = asset.get("IS_OPEN") == "Y"
+                            feat["properties"]["is_active"] = asset.get("ACTIVE", "Y") == "Y"
                             feat["properties"]["is_open_status"] = asset.get("IS_OPEN", "N")
                             break
                 print(f"[AED] Henta {len(feats)} frå live API")
@@ -84,8 +104,13 @@ def load_aeds() -> list:
     except Exception as e:
         print(f"[AED] Live API ikkje tilgjengeleg: {e}")
 
+    if cache.exists():
+        print(f"[AED] Bruker cache fallback: {cache}")
+        with open(cache, encoding="utf-8") as f:
+            return json.load(f).get("features", [])
+
     # Fallback: dummy dataset for testing
-    print("[AED] ⚠ Bruker dummy-datasett (få AED-ar, plassert realistisk i sentrum)")
+    print("[AED] WARN Bruker dummy-datasett (få AED-ar, plassert realistisk i sentrum)")
     dummies = [
         # (lat, lng, name)
         (58.1469, 8.0058, "Torvet"),
@@ -146,7 +171,7 @@ def load_brannstasjoner() -> list:
         (58.2015, 8.0379, "Tveit brannstasjon"),
         (58.1299, 7.9464, "Vågsbygd brannstasjon"),
     ]
-    print("[BRANN] ⚠ Bruker dummy-datasett")
+    print("[BRANN] WARN Bruker dummy-datasett")
     return [{
         "type": "Feature",
         "geometry": {"type": "Point", "coordinates": [lng, lat]},
@@ -181,7 +206,7 @@ def main():
     pop_path = DATA_DIR / "befolkning_kristiansand.geojson"
     kommune_path = DATA_DIR / "kristiansand_kommune.geojson"
     if not pop_path.exists() or not kommune_path.exists():
-        print("[PIPE] ✗ Manglar befolkning/kommunegrense — køyr generate_population_grid.py først.")
+        print("[PIPE] ERR Manglar befolkning/kommunegrense — køyr generate_population_grid.py først.")
         sys.exit(1)
 
     with open(pop_path, encoding="utf-8") as f:
@@ -194,6 +219,7 @@ def main():
 
     print(f"[INPUT] Befolknings-celler: {len(population_gdf)}")
     print(f"[INPUT] Kommunegrense:      {len(boundary_gdf)} polygon(ar)")
+    print(f"[INPUT] AED-dekningsmodus: {os.getenv('AED_COVERAGE_MODE', 'active')}")
 
     # ── Køyr pipeline ──
     print("\n[PIPE] Køyrer dekningsgap-pipeline...")
@@ -204,14 +230,14 @@ def main():
         population_gdf=population_gdf,
         boundary_gdf=boundary_gdf,
         n_recommendations=10,
+        aed_availability_mode=os.getenv("AED_COVERAGE_MODE", "active"),
     )
 
     # ── Lagre alle output-lag ──
     for key, geojson in results.items():
         n_feat = len(geojson.get("features", []))
         out = OUT_DIR / f"{key}.geojson"
-        with open(out, "w", encoding="utf-8") as f:
-            json.dump(geojson, f, ensure_ascii=False)
+        write_geojson(out, key, geojson)
         print(f"[OUT] {out.name:25s} {n_feat:5d} features")
 
     # ── Oppsummering ──

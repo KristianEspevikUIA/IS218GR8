@@ -131,6 +131,12 @@
         #live-coverage-box .label { font-size: 11px; color: #bbb; }
         #live-coverage-box .pct { color: #27ae60; font-size: 20px; font-weight: 700; }
         #live-coverage-box .ctx { font-size: 10px; color: #888; margin-top: 2px; }
+        .coverage-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0; }
+        .coverage-actions button, .coverage-mode {
+            width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #0f3460;
+            background: #1a1a2e; color: #eee; font-size: 12px;
+        }
+        .coverage-actions button { cursor: pointer; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -142,6 +148,7 @@
 
             <div class="legend">
                 <p><span style="background:#27ae60"></span> AED Åpen (IS_OPEN=Y)</p>
+                <p><span style="background:#f39c12"></span> AED aktiv / ukjent opningstid</p>
                 <p><span style="background:#e94560"></span> AED Stengt (IS_OPEN=N)</p>
                 <p><span style="background:#ff8c00"></span> Brannstasjon (OGC WFS)</p>
                 <p><span style="background:#3388ff"></span> Beredskapsressurs (lokal)</p>
@@ -190,6 +197,14 @@
                     </div>
                     <div class="ctx" id="stat-live-ctx">Reknast ut når AED-ar er lasta…</div>
                 </div>
+                <select id="coverage-aed-mode" class="coverage-mode" onchange="setCoverageAedMode(this.value)">
+                    <option value="active" selected>Alle aktive / potensielt tilgjengelege AED-ar</option>
+                    <option value="open">Berre registrert opne akkurat no</option>
+                </select>
+                <div class="coverage-actions">
+                    <button type="button" onclick="zoomToUserLocation()">Bruk min posisjon</button>
+                    <button type="button" onclick="zoomToAnalysisArea()">Vis Kristiansand</button>
+                </div>
 
                 <label class="cov-toggle">
                     <input type="checkbox" id="tog-risk" onchange="toggleCoverageLayer('risk', this.checked)">
@@ -223,10 +238,10 @@
             <button class="btn btn-green" onclick="refreshData()">🔄 Oppdater data</button>
 
             <button id="btn-route" class="btn btn-route" onclick="findNearestAED()">
-                ❤️ Finn nærmeste åpne AED
+                ❤️ Finn nærmeste aktive AED
             </button>
             <div id="route-info" class="route-info">
-                <h5>🚶 Rute til nærmeste åpne AED</h5>
+                <h5>🚶 Rute til nærmeste aktive AED</h5>
                 <p id="route-name"></p>
                 <p id="route-distance"></p>
                 <p id="route-time"></p>
@@ -279,6 +294,7 @@
     let postgisClickMarker = null;
     let postgisCircle = null;
     let postgisResultLayer = L.layerGroup();
+    let coverageAedMode = 'active';
 
     // Add to map + overlay control
     aedLayer.addTo(map);
@@ -326,21 +342,24 @@
             brannLayer.clearLayers();
             placesLayer.clearLayers();
 
-            let aedCount = 0, openCount = 0, closedCount = 0;
+            let aedCount = 0, openCount = 0, usableCount = 0, closedCount = 0;
 
             // ── AEDs ──
             if (data.aeds && data.aeds.features) {
                 data.aeds.features.forEach(f => {
                     const p = f.properties;
                     const [lng, lat] = f.geometry.coordinates;
-                    const isOpen = !!p.is_available;
-                    const color = isOpen ? '#27ae60' : '#e94560';
-                    const label = isOpen ? 'ÅPEN' : 'STENGT';
+                    const isOpen = !!(p.is_open ?? p.is_available);
+                    const isActive = p.is_active !== false;
+                    const isUsable = isOpen || isActive;
+                    const color = isOpen ? '#27ae60' : (isUsable ? '#f39c12' : '#e94560');
+                    const label = isOpen ? 'ÅPEN NÅ' : (isUsable ? 'AKTIV / UKJENT TID' : 'IKKE TILGJENGELIG');
 
                     const marker = L.circleMarker([lat, lng], {
                         radius: 8, color: color, fillColor: color,
                         fillOpacity: 0.7, weight: 2, opacity: 0.9,
-                        aedOpen: isOpen
+                        aedOpen: isOpen,
+                        aedUsable: isUsable
                     });
 
                     // Build rich popup
@@ -367,6 +386,7 @@
                     aedLayer.addLayer(marker);
 
                     aedCount++;
+                    if (isUsable) usableCount++;
                     if (isOpen) openCount++; else closedCount++;
                 });
             }
@@ -451,7 +471,7 @@
             const total = aedCount + beredskapCount + brannCount + placeCount;
             statusBar.innerHTML =
                 `✓ ${total} markører (${elapsed}s) — ` +
-                `AED: <b>${aedCount}</b> (${openCount} åpne, ${closedCount} stengt) · ` +
+                `AED: <b>${aedCount}</b> (${openCount} åpne nå, ${usableCount} aktive/brukbare) · ` +
                 `Brannstasjonar: <b>${brannCount}</b> · ` +
                 `Beredskap: <b>${beredskapCount}</b> · ` +
                 `Stader: <b>${placeCount}</b>`;
@@ -548,7 +568,9 @@
             btn.innerHTML = '<span class="spinner"></span>Finner rute…';
         } else {
             btn.disabled = false;
-            btn.innerHTML = '❤️ Finn nærmeste åpne AED';
+            btn.innerHTML = coverageAedMode === 'open'
+                ? '❤️ Finn nærmeste åpne AED'
+                : '❤️ Finn nærmeste aktive AED';
         }
     }
 
@@ -562,13 +584,13 @@
     async function findNearestAED() {
         // ── 1. Check OPEN AEDs exist ──
         const allMarkers = aedLayer.getLayers();
-        const aedMarkers = allMarkers.filter(m => m.options && m.options.aedOpen === true);
+        const aedMarkers = getCoverageAedMarkers();
         if (!allMarkers || allMarkers.length === 0) {
             showToast('Ingen hjertestartere er lastet på kartet.', 'error');
             return;
         }
         if (aedMarkers.length === 0) {
-            showToast('Ingen åpne hjertestartere tilgjengelig akkurat nå.', 'error');
+            showToast('Ingen hjertestartere tilgjengelig i valgt AED-modus.', 'error');
             return;
         }
 
@@ -931,6 +953,46 @@
         return R * Math.sqrt(dx * dx + dy * dy);
     }
 
+    function getCoverageAedMarkers() {
+        const key = coverageAedMode === 'open' ? 'aedOpen' : 'aedUsable';
+        return aedLayer.getLayers().filter(m => m.options && m.options[key] === true);
+    }
+
+    function setCoverageAedMode(mode) {
+        coverageAedMode = mode === 'open' ? 'open' : 'active';
+        const routeBtn = document.getElementById('btn-route');
+        if (routeBtn && !routeBtn.disabled) {
+            routeBtn.textContent = coverageAedMode === 'open'
+                ? '❤️ Finn nærmeste åpne AED'
+                : '❤️ Finn nærmeste aktive AED';
+        }
+        computeLiveCoverage().catch(e => console.warn('[LIVE-COV]', e));
+    }
+
+    function zoomToAnalysisArea() {
+        map.setView([58.1414, 8.0842], 12);
+        computeLiveCoverage().catch(e => console.warn('[LIVE-COV]', e));
+    }
+
+    async function zoomToUserLocation() {
+        try {
+            const pos = await new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    reject(new Error('Geolocation not supported.'));
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000
+                });
+            });
+            map.setView([pos.coords.latitude, pos.coords.longitude], 14);
+        } catch (err) {
+            showToast('Kunne ikkje hente posisjon: ' + err.message, 'error');
+        }
+    }
+
     async function computeLiveCoverage() {
         const elPct = document.getElementById('stat-live-cov');
         const elCtx = document.getElementById('stat-live-ctx');
@@ -941,35 +1003,56 @@
                 elCtx.textContent = 'Ingen befolkningsceller funne.';
                 return;
             }
-            const openAeds = aedLayer.getLayers()
-                .filter(m => m.options && m.options.aedOpen === true)
-                .map(m => { const ll = m.getLatLng(); return { lat: ll.lat, lng: ll.lng }; });
-
-            if (openAeds.length === 0) {
+            
+            // Finn synlege celler i aktivt kartutsnitt
+            const bounds = map.getBounds();
+            const visibleCells = cells.filter(c => bounds.contains([c.lat, c.lng]));
+            
+            if (visibleCells.length === 0) {
                 elPct.textContent = 'n/a';
                 elPct.style.color = '#888';
-                elCtx.textContent = 'Ingen åpne AED-ar lasta enno.';
+                elCtx.textContent = 'Ingen befolka ruter synlege i kartutsnittet.';
+                return;
+            }
+
+            const coverageAeds = getCoverageAedMarkers()
+                .map(m => { const ll = m.getLatLng(); return { lat: ll.lat, lng: ll.lng }; });
+
+            if (coverageAeds.length === 0) {
+                elPct.textContent = 'n/a';
+                elPct.style.color = '#888';
+                elCtx.textContent = coverageAedMode === 'open'
+                    ? 'Ingen registrert opne AED-ar lasta enno.'
+                    : 'Ingen aktive AED-ar lasta enno.';
                 return;
             }
 
             const RADIUS = 400;
             let coveredPop = 0, totalPop = 0;
-            cells.forEach(c => {
+            visibleCells.forEach(c => {
                 totalPop += c.pop;
-                for (let i = 0; i < openAeds.length; i++) {
-                    if (distMeters(c.lat, c.lng, openAeds[i].lat, openAeds[i].lng) <= RADIUS) {
+                for (let i = 0; i < coverageAeds.length; i++) {
+                    if (distMeters(c.lat, c.lng, coverageAeds[i].lat, coverageAeds[i].lng) <= RADIUS) {
                         coveredPop += c.pop;
                         break;
                     }
                 }
             });
+            
+            if (totalPop === 0) {
+                elPct.textContent = 'n/a';
+                elCtx.textContent = 'Befolkning i synleg utsnitt er 0.';
+                return;
+            }
+
             const pct = (coveredPop / totalPop) * 100;
             elPct.textContent = pct.toFixed(1) + ' %';
             elPct.style.color = pct >= 30 ? '#27ae60' : (pct >= 10 ? '#f39c12' : '#e74c3c');
             elCtx.textContent =
                 `${Math.round(coveredPop).toLocaleString('nb-NO')} av ` +
-                `${Math.round(totalPop).toLocaleString('nb-NO')} innbyggjarar dekt — ` +
-                `basert på ${openAeds.length} åpne AED-ar henta no.`;
+                `${Math.round(totalPop).toLocaleString('nb-NO')} innbyggjarar i VIST utsnitt dekt — ` +
+                `basert på ${coverageAeds.length} ` +
+                `${coverageAedMode === 'open' ? 'registrert opne' : 'aktive/potensielt tilgjengelege'} AED-ar.`;
         } catch (err) {
             console.warn('[LIVE-COV] feila:', err);
             elCtx.textContent = 'Kunne ikkje rekne ut dekning (sjå konsoll).';
@@ -1078,6 +1161,13 @@
     window.addEventListener('load', async () => {
         await loadLayers();
         await loadCoverageLayers();   // hentar risk-grid + reknar live-dekning
+    // Oppdater live-dekningsstatistikk på move/zoom
+    map.on('moveend', () => {
+        if (typeof computeLiveCoverage === 'function') {
+            computeLiveCoverage().catch(e => console.warn('[LIVE-COV]', e));
+        }
+    });
+
     });
     </script>
 </body>

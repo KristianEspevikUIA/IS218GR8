@@ -1,4 +1,4 @@
-"""
+﻿"""
 AppController.py - Main application controller
 Orchestrates initialization and overall application flow.
 Now supports DYNAMIC data serving — no more frozen Folium HTML.
@@ -50,10 +50,10 @@ class AppController:
             self.setup_data_sources()
             self._load_local_geojson()
 
-            print("✓ Controller initialized (data served dynamically per request)")
+            print("OK Controller initialized (data served dynamically per request)")
             return True
         except Exception as e:
-            print(f"✗ Initialization error: {e}")
+            print(f"ERR Initialization error: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -90,9 +90,9 @@ class AppController:
                 self.geojson_data = json.load(f)
             self._local_features = self.geojson_data.get('features', [])
             self.data_model.store_data('geojson-local', self.geojson_data)
-            print(f"✓ Loaded {len(self._local_features)} features from local GeoJSON")
+            print(f"OK Loaded {len(self._local_features)} features from local GeoJSON")
         except Exception as e:
-            print(f"✗ Error loading local GeoJSON: {e}")
+            print(f"ERR Error loading local GeoJSON: {e}")
             self._local_features = []
 
     # ═══════════════════════════════════════════════════════════
@@ -119,7 +119,7 @@ class AppController:
             brann_geojson = self.data_model.fetch_brannstasjoner_wfs()
             layers['brannstasjoner'] = brann_geojson
         except Exception as e:
-            print(f"[DYNAMIC] ✗ brannstasjoner WFS failed: {e}")
+            print(f"[DYNAMIC] ERR brannstasjoner WFS failed: {e}")
             layers['brannstasjoner'] = {"type": "FeatureCollection", "features": []}
 
         # 3. AEDs — prefer Supabase hjertestartere, fallback to live API
@@ -177,12 +177,14 @@ class AppController:
                     for asset in response['ASSETS']:
                         if asset.get('ASSET_ID') == feature['properties'].get('asset_id'):
                             feature['properties']['is_available'] = asset.get('IS_OPEN') == 'Y'
+                            feature['properties']['is_open'] = asset.get('IS_OPEN') == 'Y'
+                            feature['properties']['is_active'] = asset.get('ACTIVE', 'Y') == 'Y'
                             feature['properties']['is_open_status'] = asset.get('IS_OPEN', 'N')
                             break
                 _diag_features("DYNAMIC-AED-API-FALLBACK", geojson['features'])
                 return geojson
         except Exception as e:
-            print(f"✗ API fallback failed: {e}")
+            print(f"ERR API fallback failed: {e}")
         return {"type": "FeatureCollection", "features": []}
 
     def perform_spatial_search(self, radius_km: float) -> List[Dict]:
@@ -209,11 +211,11 @@ class AppController:
             )
             return {'count': len(aeds), 'aeds': aeds}
         except Exception as e:
-            print(f"✗ Error fetching available AEDs: {e}")
+            print(f"ERR Error fetching available AEDs: {e}")
             return {'count': 0, 'aeds': []}
 
     def save_map(self, filepath: str):
-        print(f"⚠ save_map() no longer applicable with dynamic Leaflet.js frontend")
+        print(f"WARN save_map() no longer applicable with dynamic Leaflet.js frontend")
 
     # ═══════════════════════════════════════════════════════════
     #  Semesterprosjekt — Dekningsgap-analyse (Oppgåve 4)
@@ -236,18 +238,18 @@ class AppController:
 
         path = self._coverage_dir / f"{name}.geojson"
         if not path.exists():
-            print(f"[COVERAGE] ⚠ Manglar {path.name} — køyr run_coverage_analysis.py")
+            print(f"[COVERAGE] WARN Manglar {path.name} — køyr run_coverage_analysis.py")
             return {"type": "FeatureCollection", "features": []}
 
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self._coverage_cache[name] = data
-            print(f"[COVERAGE] ✓ Lasta {path.name} "
+            print(f"[COVERAGE] OK Lasta {path.name} "
                   f"({len(data.get('features', []))} features)")
             return data
         except Exception as e:
-            print(f"[COVERAGE] ✗ Kunne ikkje lese {path.name}: {e}")
+            print(f"[COVERAGE] ERR Kunne ikkje lese {path.name}: {e}")
             return {"type": "FeatureCollection", "features": []}
 
     def coverage_summary(self) -> Dict:
