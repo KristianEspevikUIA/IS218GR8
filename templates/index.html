@@ -126,13 +126,11 @@
         .cov-stats .stat b { display: block; color: #e94560; font-size: 15px; font-weight: 700; }
         .risk-legend { display: flex; gap: 4px; margin-top: 4px; font-size: 10px; flex-wrap: wrap; }
         .risk-legend span { padding: 1px 5px; border-radius: 3px; color: #fff; font-weight: 600; }
-        .rec-marker {
-            background: #8e24aa; color: #fff; border: 2px solid #fff;
-            border-radius: 50%; width: 28px; height: 28px;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 700; font-size: 13px;
-            box-shadow: 0 2px 6px rgba(0,0,0,.4);
-        }
+        #live-coverage-box { background: #0f3460; border-radius: 5px; padding: 8px 10px; margin: 6px 0; }
+        #live-coverage-box .row { display: flex; justify-content: space-between; align-items: baseline; }
+        #live-coverage-box .label { font-size: 11px; color: #bbb; }
+        #live-coverage-box .pct { color: #27ae60; font-size: 20px; font-weight: 700; }
+        #live-coverage-box .ctx { font-size: 10px; color: #888; margin-top: 2px; }
     </style>
 </head>
 <body>
@@ -184,11 +182,13 @@
                     Analyse av AED-dekning, risikoscore per 250m-rute og anbefalte nye plasseringar.
                 </p>
 
-                <div class="cov-stats" id="coverage-stats">
-                    <div class="stat">Total befolkning<b id="stat-total">—</b></div>
-                    <div class="stat">AED-dekning<b id="stat-cov">—</b></div>
-                    <div class="stat">Utan dekning<b id="stat-uncov">—</b></div>
-                    <div class="stat">Anbefalte AED<b id="stat-recs">—</b></div>
+                <!-- Live-utrekna dekning frå AED-ane som er lasta no -->
+                <div id="live-coverage-box">
+                    <div class="row">
+                        <span class="label">Befolkningsdekning innan 400 m</span>
+                        <b class="pct" id="stat-live-cov">—</b>
+                    </div>
+                    <div class="ctx" id="stat-live-ctx">Reknast ut når AED-ar er lasta…</div>
                 </div>
 
                 <label class="cov-toggle">
@@ -214,12 +214,6 @@
                     <input type="checkbox" id="tog-services" onchange="toggleCoverageLayer('services', this.checked)">
                     <span class="cov-swatch" style="background:rgba(39,174,96,.3);border:1px solid #27ae60"></span>
                     Service areas (buffer)
-                </label>
-
-                <label class="cov-toggle">
-                    <input type="checkbox" id="tog-recs" checked onchange="toggleCoverageLayer('recs', this.checked)">
-                    <span class="cov-swatch" style="background:#8e24aa"></span>
-                    Anbefalte nye AED (top 10)
                 </label>
 
                 <button class="btn btn-blue" style="margin-top:6px;padding:6px;font-size:12px;width:100%"
@@ -463,6 +457,12 @@
                 `Stader: <b>${placeCount}</b>`;
 
             console.log(`[DIAG-FRONTEND] loaded ${total} features, elapsed=${elapsed}s`);
+
+            // Oppdater live-dekningsstatistikk når AED-ane er på plass.
+            // (Feilar elegant viss risk-grid ikkje er klar enno.)
+            if (typeof computeLiveCoverage === 'function') {
+                computeLiveCoverage().catch(e => console.warn('[LIVE-COV]', e));
+            }
 
         } catch (err) {
             statusBar.textContent = '✗ Feil ved lasting av data: ' + err.message;
@@ -865,16 +865,14 @@
         risk:     L.layerGroup(),
         gaps:     L.layerGroup(),
         services: L.layerGroup(),
-        recs:     L.layerGroup(),
     };
-    const coverageLoaded = { risk: false, gaps: false, services: false, recs: false };
+    const coverageLoaded = { risk: false, gaps: false, services: false };
 
     // Legg til i overlay-control slik at dei kan skruast av/på
     L.control.layers(null, {
         "🎨 Risikoscore (koroplett)": coverageLayers.risk,
         "🚫 Dekningsgap":             coverageLayers.gaps,
         "🟢 Service areas":           coverageLayers.services,
-        "💡 Anbefalte AED":           coverageLayers.recs,
     }, { position: 'topright' }).addTo(map);
 
     // Fargepalett for risk_class
@@ -902,22 +900,84 @@
         return r.json();
     }
 
-    async function loadCoverageSummary() {
+    // ── LIVE befolkningsdekning — reknast i nettlesaren basert på AED-ane som
+    //    faktisk er lasta no (live frå API). Ingen avhengigheit av server-cache.
+
+    let _populationCells = null;
+
+    async function getPopulationCells() {
+        if (_populationCells) return _populationCells;
+        const grid = await fetchCoverage('risk-grid');
+        _populationCells = (grid.features || [])
+            .filter(f => (f.properties.population || 0) > 0.1)
+            .map(f => {
+                const ring = f.geometry.coordinates[0];
+                let sx = 0, sy = 0;
+                ring.forEach(([x, y]) => { sx += x; sy += y; });
+                return {
+                    lng: sx / ring.length,
+                    lat: sy / ring.length,
+                    pop: f.properties.population
+                };
+            });
+        return _populationCells;
+    }
+
+    function distMeters(lat1, lng1, lat2, lng2) {
+        const R = 6371000;
+        const phi = (lat1 + lat2) * Math.PI / 360;
+        const dx = (lng2 - lng1) * Math.PI / 180 * Math.cos(phi);
+        const dy = (lat2 - lat1) * Math.PI / 180;
+        return R * Math.sqrt(dx * dx + dy * dy);
+    }
+
+    async function computeLiveCoverage() {
+        const elPct = document.getElementById('stat-live-cov');
+        const elCtx = document.getElementById('stat-live-ctx');
+        if (!elPct) return;
         try {
-            const r = await fetch('/api/coverage/summary', { cache: 'no-store' });
-            const { data } = await r.json();
-            if (!data) return;
-            document.getElementById('stat-total').textContent =
-                Number(data.total_population).toLocaleString('nb-NO');
-            document.getElementById('stat-cov').textContent =
-                data.coverage_pct.toFixed(1) + '%';
-            document.getElementById('stat-uncov').textContent =
-                Number(data.uncovered_population).toLocaleString('nb-NO');
-            document.getElementById('stat-recs').textContent = data.n_recommendations;
+            const cells = await getPopulationCells();
+            if (!cells.length) {
+                elCtx.textContent = 'Ingen befolkningsceller funne.';
+                return;
+            }
+            const openAeds = aedLayer.getLayers()
+                .filter(m => m.options && m.options.aedOpen === true)
+                .map(m => { const ll = m.getLatLng(); return { lat: ll.lat, lng: ll.lng }; });
+
+            if (openAeds.length === 0) {
+                elPct.textContent = 'n/a';
+                elPct.style.color = '#888';
+                elCtx.textContent = 'Ingen åpne AED-ar lasta enno.';
+                return;
+            }
+
+            const RADIUS = 400;
+            let coveredPop = 0, totalPop = 0;
+            cells.forEach(c => {
+                totalPop += c.pop;
+                for (let i = 0; i < openAeds.length; i++) {
+                    if (distMeters(c.lat, c.lng, openAeds[i].lat, openAeds[i].lng) <= RADIUS) {
+                        coveredPop += c.pop;
+                        break;
+                    }
+                }
+            });
+            const pct = (coveredPop / totalPop) * 100;
+            elPct.textContent = pct.toFixed(1) + ' %';
+            elPct.style.color = pct >= 30 ? '#27ae60' : (pct >= 10 ? '#f39c12' : '#e74c3c');
+            elCtx.textContent =
+                `${Math.round(coveredPop).toLocaleString('nb-NO')} av ` +
+                `${Math.round(totalPop).toLocaleString('nb-NO')} innbyggjarar dekt — ` +
+                `basert på ${openAeds.length} åpne AED-ar henta no.`;
         } catch (err) {
-            console.warn('[COVERAGE] summary failed:', err);
+            console.warn('[LIVE-COV] feila:', err);
+            elCtx.textContent = 'Kunne ikkje rekne ut dekning (sjå konsoll).';
         }
     }
+
+    // Behaldar gamle namnet som no-op for bakoverkompatibilitet
+    async function loadCoverageSummary() { /* noop — sjå computeLiveCoverage() */ }
 
     async function loadCoverageLayers(forceReload = false) {
         showToast('Lastar dekningsgap-analyse…', 'info');
@@ -987,33 +1047,11 @@
                 coverageLoaded.services = true;
             }
 
-            // Recommendations — nummererte markørar
-            if (!coverageLoaded.recs || forceReload) {
-                coverageLayers.recs.clearLayers();
-                const recs = await fetchCoverage('recommendations');
-                (recs.features || []).forEach(feat => {
-                    const [lng, lat] = feat.geometry.coordinates;
-                    const p = feat.properties;
-                    const icon = L.divIcon({
-                        className: '',
-                        html: `<div class="rec-marker">${p.rank}</div>`,
-                        iconSize: [28, 28],
-                        iconAnchor: [14, 14]
-                    });
-                    const m = L.marker([lat, lng], { icon, zIndexOffset: 1000 });
-                    m.bindPopup(
-                        `<b>Anbefaling #${p.rank}</b><br>` +
-                        `Dekker <b>${p.population_covered}</b> personar (≤400m)<br>` +
-                        `<small>Celle: ${p.cell_id}</small>`
-                    );
-                    m.bindTooltip(`#${p.rank}: dekker ${p.population_covered} pers`);
-                    coverageLayers.recs.addLayer(m);
-                });
-                coverageLoaded.recs = true;
-            }
+            // (Topp-10 anbefalingar er fjerna — datasettet er ikkje representativt
+            //  nok til å gi pålitelige plasseringsforslag i live demo.)
 
-            await loadCoverageSummary();
-            showToast('Dekningsgap-analyse lasta', 'success');
+            await computeLiveCoverage();
+            showToast('Romleg analyse lasta', 'success');
         } catch (err) {
             showToast('Feil ved lasting av analyse: ' + err.message, 'error');
             console.error(err);
@@ -1039,11 +1077,7 @@
     // ═══════════════════════════════════════════════════
     window.addEventListener('load', async () => {
         await loadLayers();
-        // Hent coverage-summary umiddelbart (billig), last anbefalingar
-        await loadCoverageSummary();
-        await loadCoverageLayers();
-        // Standard: vis anbefalingar
-        map.addLayer(coverageLayers.recs);
+        await loadCoverageLayers();   // hentar risk-grid + reknar live-dekning
     });
     </script>
 </body>
