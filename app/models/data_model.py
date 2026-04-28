@@ -249,8 +249,13 @@ class DataModel:
             active_status = self._first_present(
                 row, 'active', 'is_active', 'asset_status', 'ACTIVE'
             )
-            is_open = self._truthy_status(open_status)
             is_active = self._truthy_status(active_status, default=True)
+            opening_hours_text = (row.get('opening_hours_text') or '').strip()
+            registered_open = self._truthy_status(open_status)
+            assumed_business_hours = is_active and not registered_open
+            is_open = registered_open or (
+                assumed_business_hours and self._is_business_hours_now()
+            )
             feature = {
                 "type": "Feature",
                 "geometry": {"type": "Point", "coordinates": [lng, lat]},
@@ -263,7 +268,10 @@ class DataModel:
                     "is_open": is_open,
                     "is_active": is_active,
                     "is_open_status": 'Y' if is_open else 'N',
-                    "opening_hours_text": row.get('opening_hours_text', ''),
+                    "availability_assumption": (
+                        "business_hours_08_16" if assumed_business_hours else "registered"
+                    ),
+                    "opening_hours_text": opening_hours_text,
                     "distance_km": row.get('distance_km', 0),
                     "source": "supabase/hjertestartere"
                 }
@@ -301,6 +309,23 @@ class DataModel:
         if text in {'n', 'no', 'false', '0', 'closed', 'inactive', 'stengt'}:
             return False
         return default
+
+    @staticmethod
+    def _is_business_hours_now() -> bool:
+        now = datetime.now()
+        return 8 <= now.hour < 16
+
+    @staticmethod
+    def _has_known_opening_hours(text: str) -> bool:
+        normalized = (text or '').strip().lower()
+        if not normalized:
+            return False
+        unknown_values = {
+            '-', 'n/a', 'na', 'none', 'null', 'ukjent', 'ukjent tid',
+            'ukjent åpningstid', 'ukjent opningstid', 'ikke oppgitt',
+            'ikkje oppgitt', 'unknown', 'unknown hours'
+        }
+        return normalized not in unknown_values
 
     # ═══════════════════════════════════════════════════════════
     #  Places helpers
