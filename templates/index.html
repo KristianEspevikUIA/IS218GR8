@@ -192,7 +192,7 @@
                 <!-- Live-utrekna dekning frå AED-ane som er lasta no -->
                 <div id="live-coverage-box">
                     <div class="row">
-                        <span class="label">Befolkningsdekning innan 400 m</span>
+                        <span class="label">Lokal AED-dekning innan 400 m</span>
                         <b class="pct" id="stat-live-cov">—</b>
                     </div>
                     <div class="ctx" id="stat-live-ctx">Reknast ut når AED-ar er lasta…</div>
@@ -238,14 +238,15 @@
             <button class="btn btn-green" onclick="refreshData()">🔄 Oppdater data</button>
 
             <button id="btn-route" class="btn btn-route" onclick="findNearestAED()">
-                ❤️ Finn nærmeste aktive AED
+                ❤️ Finn nærmeste åpne AED
             </button>
             <div id="route-info" class="route-info">
-                <h5>🚶 Rute til nærmeste aktive AED</h5>
+                <h5>🚶 Rute til nærmeste åpne AED</h5>
                 <p id="route-name"></p>
                 <p id="route-distance"></p>
                 <p id="route-time"></p>
                 <p id="route-address"></p>
+                <p id="route-access"></p>
                 <button class="close-route" onclick="clearRoute()">✕ Fjern rute</button>
             </div>
 
@@ -349,17 +350,31 @@
                 data.aeds.features.forEach(f => {
                     const p = f.properties;
                     const [lng, lat] = f.geometry.coordinates;
-                    const isOpen = !!(p.is_open ?? p.is_available);
-                    const isActive = p.is_active !== false;
+                    const isActive = p.is_active !== false && p.is_active !== 'false' && p.is_active !== 0;
+                    const registeredOpen = !!(p.is_open ?? p.is_available);
+                    const usesBusinessHours = isActive && !registeredOpen;
+                    const isOpen = registeredOpen || (usesBusinessHours && isBusinessHoursNow());
                     const isUsable = isOpen || isActive;
                     const color = isOpen ? '#27ae60' : (isUsable ? '#f39c12' : '#e94560');
-                    const label = isOpen ? 'ÅPEN NÅ' : (isUsable ? 'AKTIV / UKJENT TID' : 'IKKE TILGJENGELIG');
+                    const label = isOpen
+                        ? (usesBusinessHours ? 'ÅPEN 08-16' : 'ÅPEN NÅ')
+                        : (isUsable ? 'AKTIV / UKJENT TID' : 'IKKE TILGJENGELIG');
 
                     const marker = L.circleMarker([lat, lng], {
                         radius: 8, color: color, fillColor: color,
                         fillOpacity: 0.7, weight: 2, opacity: 0.9,
                         aedOpen: isOpen,
-                        aedUsable: isUsable
+                        aedUsable: isUsable,
+                        aedData: {
+                            name: p.site_name || 'AED',
+                            address: [
+                                p.site_address || '',
+                                [p.site_post_code || '', p.site_post_area || ''].join(' ').trim()
+                            ].filter(Boolean).join(', '),
+                            access: p.site_access_info || p.site_description || '',
+                            floor: p.site_floor_number != null ? String(p.site_floor_number) : '',
+                            label
+                        }
                     });
 
                     // Build rich popup
@@ -372,6 +387,7 @@
                     if (p.site_description) popup += `<b>Beskrivelse:</b> ${p.site_description}<br>`;
                     if (p.site_access_info) popup += `<b>Tilgang:</b> ${p.site_access_info}<br>`;
                     if (p.opening_hours_text) popup += `<b>Åpningstider:</b> ${p.opening_hours_text}<br>`;
+                    if (usesBusinessHours) popup += `<b>Åpningstider:</b> Antatt åpen 08-16<br>`;
                     if (p.serial_number) popup += `<small>Serienr: ${p.serial_number}</small><br>`;
                     if (p.asset_id) popup += `<small>ID: ${p.asset_id}</small><br>`;
                     if (p.modified_date) {
@@ -568,9 +584,7 @@
             btn.innerHTML = '<span class="spinner"></span>Finner rute…';
         } else {
             btn.disabled = false;
-            btn.innerHTML = coverageAedMode === 'open'
-                ? '❤️ Finn nærmeste åpne AED'
-                : '❤️ Finn nærmeste aktive AED';
+            btn.innerHTML = '❤️ Finn nærmeste åpne AED';
         }
     }
 
@@ -579,18 +593,20 @@
         if (userMarker)  { map.removeLayer(userMarker);  userMarker  = null; }
         if (destMarker)  { map.removeLayer(destMarker);  destMarker  = null; }
         document.getElementById('route-info').style.display = 'none';
+        document.getElementById('route-access').textContent = '';
     }
 
     async function findNearestAED() {
         // ── 1. Check OPEN AEDs exist ──
         const allMarkers = aedLayer.getLayers();
-        const aedMarkers = getCoverageAedMarkers();
+        const aedMarkers = aedLayer.getLayers()
+            .filter(m => m.options && m.options.aedOpen === true);
         if (!allMarkers || allMarkers.length === 0) {
             showToast('Ingen hjertestartere er lastet på kartet.', 'error');
             return;
         }
         if (aedMarkers.length === 0) {
-            showToast('Ingen hjertestartere tilgjengelig i valgt AED-modus.', 'error');
+            showToast('Ingen åpne hjertestartere tilgjengelig akkurat nå.', 'error');
             return;
         }
 
@@ -649,13 +665,13 @@
             return;
         }
 
-        // Extract AED info from popup
-        let aedName = 'AED', aedAddress = '';
-        const popupContent = nearest.getPopup()?.getContent() || '';
-        const nameMatch = popupContent.match(/<b>([^<]+)<\/b>/);
-        if (nameMatch) aedName = nameMatch[1];
-        const addrParts = popupContent.split('<br>');
-        if (addrParts.length > 1) aedAddress = addrParts[1].trim();
+        const aedInfo = nearest.options.aedData || {};
+        const aedName = aedInfo.name || 'AED';
+        const aedAddress = aedInfo.address || '';
+        const aedAccess = [
+            aedInfo.floor ? `Etasje: ${aedInfo.floor}` : '',
+            aedInfo.access || ''
+        ].filter(Boolean).join(' · ');
 
         // ── 4. Fetch route from OSRM ──
         try {
@@ -707,7 +723,8 @@
             document.getElementById('route-name').innerHTML = `<b>${aedName}</b>`;
             document.getElementById('route-distance').textContent = `Avstand: ${distKm} km`;
             document.getElementById('route-time').textContent = `Estimert gåtid: ~${durMin} min`;
-            document.getElementById('route-address').textContent = aedAddress;
+            document.getElementById('route-address').textContent = aedAddress ? `Adresse: ${aedAddress}` : '';
+            document.getElementById('route-access').textContent = aedAccess ? `Plassering: ${aedAccess}` : '';
             document.getElementById('route-info').style.display = 'block';
 
             showToast(`Nærmeste AED: ${aedName} (${distKm} km, ~${durMin} min)`, 'success');
@@ -738,7 +755,8 @@
             document.getElementById('route-name').innerHTML = `<b>${aedName}</b>`;
             document.getElementById('route-distance').textContent = `Avstand: ~${nearestDist.toFixed(2)} km (luftlinje)`;
             document.getElementById('route-time').textContent = `Ruteberegning feilet: ${err.message}`;
-            document.getElementById('route-address').textContent = aedAddress;
+            document.getElementById('route-address').textContent = aedAddress ? `Adresse: ${aedAddress}` : '';
+            document.getElementById('route-access').textContent = aedAccess ? `Plassering: ${aedAccess}` : '';
             document.getElementById('route-info').style.display = 'block';
 
             showToast(`Ruteberegning feilet — viser luftlinje (${nearestDist.toFixed(2)} km)`, 'error');
@@ -934,15 +952,88 @@
             .filter(f => (f.properties.population || 0) > 0.1)
             .map(f => {
                 const ring = f.geometry.coordinates[0];
-                let sx = 0, sy = 0;
-                ring.forEach(([x, y]) => { sx += x; sy += y; });
+                const lngs = ring.map(([x]) => x);
+                const lats = ring.map(([, y]) => y);
+                const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+                const minLat = Math.min(...lats), maxLat = Math.max(...lats);
                 return {
-                    lng: sx / ring.length,
-                    lat: sy / ring.length,
-                    pop: f.properties.population
+                    lng: (minLng + maxLng) / 2,
+                    lat: (minLat + maxLat) / 2,
+                    minLng, maxLng, minLat, maxLat,
+                    pop: f.properties.population,
+                    coverageFrac: f.properties.coverage_frac || 0
                 };
             });
         return _populationCells;
+    }
+
+    function hasKnownOpeningHours(text) {
+        const value = String(text || '').trim().toLowerCase();
+        if (!value) return false;
+        return ![
+            '-', 'n/a', 'na', 'none', 'null', 'ukjent', 'ukjent tid',
+            'ukjent åpningstid', 'ukjent opningstid', 'ikke oppgitt',
+            'ikkje oppgitt', 'unknown', 'unknown hours'
+        ].includes(value);
+    }
+
+    function isBusinessHoursNow() {
+        const hour = Number(new Intl.DateTimeFormat('nb-NO', {
+            timeZone: 'Europe/Oslo',
+            hour: '2-digit',
+            hour12: false
+        }).format(new Date()));
+        return hour >= 8 && hour < 16;
+    }
+
+    function cellIntersectsBounds(cell, bounds) {
+        return !(
+            cell.maxLat < bounds.getSouth() ||
+            cell.minLat > bounds.getNorth() ||
+            cell.maxLng < bounds.getWest() ||
+            cell.minLng > bounds.getEast()
+        );
+    }
+
+    function expandedAnalysisBounds(bounds) {
+        const center = bounds.getCenter();
+        const kristiansandSentrum = L.latLngBounds(
+            [58.1390, 7.9880],
+            [58.1558, 8.0248]
+        );
+        if (kristiansandSentrum.contains(center) && map.getZoom() >= 14) {
+            return kristiansandSentrum;
+        }
+        const north = bounds.getNorth();
+        const south = bounds.getSouth();
+        const east = bounds.getEast();
+        const west = bounds.getWest();
+        const heightM = distMeters(south, center.lng, north, center.lng);
+        const widthM = distMeters(center.lat, west, center.lat, east);
+        const minSizeM = 900;
+        if (heightM >= minSizeM && widthM >= minSizeM) return bounds;
+
+        const halfLat = Math.max((north - south) / 2, (minSizeM / 2) / 111320);
+        const metersPerLng = Math.max(1, 111320 * Math.cos(center.lat * Math.PI / 180));
+        const halfLng = Math.max((east - west) / 2, (minSizeM / 2) / metersPerLng);
+        return L.latLngBounds(
+            [center.lat - halfLat, center.lng - halfLng],
+            [center.lat + halfLat, center.lng + halfLng]
+        );
+    }
+
+    function nearestCellToMapCenter(cells) {
+        const center = map.getCenter();
+        let best = null;
+        let bestDist = Infinity;
+        cells.forEach(c => {
+            const d = distMeters(center.lat, center.lng, c.lat, c.lng);
+            if (d < bestDist) {
+                best = c;
+                bestDist = d;
+            }
+        });
+        return best ? [best] : [];
     }
 
     function distMeters(lat1, lng1, lat2, lng2) {
@@ -951,6 +1042,24 @@
         const dx = (lng2 - lng1) * Math.PI / 180 * Math.cos(phi);
         const dy = (lat2 - lat1) * Math.PI / 180;
         return R * Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function distanceToCellMeters(lat, lng, cell) {
+        const clampedLat = Math.max(cell.minLat, Math.min(lat, cell.maxLat));
+        const clampedLng = Math.max(cell.minLng, Math.min(lng, cell.maxLng));
+        return distMeters(lat, lng, clampedLat, clampedLng);
+    }
+
+    function pointNearBounds(point, bounds, paddingM = 450) {
+        const center = bounds.getCenter();
+        const metersPerLat = 111320;
+        const metersPerLng = Math.max(1, 111320 * Math.cos(center.lat * Math.PI / 180));
+        const padLat = paddingM / metersPerLat;
+        const padLng = paddingM / metersPerLng;
+        return point.lat >= bounds.getSouth() - padLat &&
+            point.lat <= bounds.getNorth() + padLat &&
+            point.lng >= bounds.getWest() - padLng &&
+            point.lng <= bounds.getEast() + padLng;
     }
 
     function getCoverageAedMarkers() {
@@ -962,9 +1071,7 @@
         coverageAedMode = mode === 'open' ? 'open' : 'active';
         const routeBtn = document.getElementById('btn-route');
         if (routeBtn && !routeBtn.disabled) {
-            routeBtn.textContent = coverageAedMode === 'open'
-                ? '❤️ Finn nærmeste åpne AED'
-                : '❤️ Finn nærmeste aktive AED';
+            routeBtn.textContent = '❤️ Finn nærmeste åpne AED';
         }
         computeLiveCoverage().catch(e => console.warn('[LIVE-COV]', e));
     }
@@ -1005,8 +1112,13 @@
             }
             
             // Finn synlege celler i aktivt kartutsnitt
-            const bounds = map.getBounds();
-            const visibleCells = cells.filter(c => bounds.contains([c.lat, c.lng]));
+            const rawBounds = map.getBounds();
+            const bounds = expandedAnalysisBounds(rawBounds);
+            const usingSentrumArea = bounds.contains([58.1467, 8.0059]) && map.getZoom() >= 14;
+            let visibleCells = cells.filter(c => cellIntersectsBounds(c, bounds));
+            if (visibleCells.length === 0 && map.getZoom() >= 15) {
+                visibleCells = nearestCellToMapCenter(cells);
+            }
             
             if (visibleCells.length === 0) {
                 elPct.textContent = 'n/a';
@@ -1017,6 +1129,7 @@
 
             const coverageAeds = getCoverageAedMarkers()
                 .map(m => { const ll = m.getLatLng(); return { lat: ll.lat, lng: ll.lng }; });
+            const nearbyAeds = coverageAeds.filter(a => pointNearBounds(a, rawBounds, 500));
 
             if (coverageAeds.length === 0) {
                 elPct.textContent = 'n/a';
@@ -1029,15 +1142,31 @@
 
             const RADIUS = 400;
             let coveredPop = 0, totalPop = 0;
+            const aedsForCoverage = nearbyAeds.length ? nearbyAeds : coverageAeds;
+
             visibleCells.forEach(c => {
                 totalPop += c.pop;
-                for (let i = 0; i < coverageAeds.length; i++) {
-                    if (distMeters(c.lat, c.lng, coverageAeds[i].lat, coverageAeds[i].lng) <= RADIUS) {
+                for (let i = 0; i < aedsForCoverage.length; i++) {
+                    const aed = aedsForCoverage[i];
+                    const centerDist = distMeters(c.lat, c.lng, aed.lat, aed.lng);
+                    const edgeDist = distanceToCellMeters(aed.lat, aed.lng, c);
+                    if (edgeDist <= RADIUS || centerDist <= RADIUS + 180) {
                         coveredPop += c.pop;
                         break;
                     }
                 }
             });
+
+            if (coveredPop === 0 && nearbyAeds.length > 0 && totalPop > 0) {
+                const center = rawBounds.getCenter();
+                const nearest = nearbyAeds.reduce((best, aed) => {
+                    const d = distMeters(center.lat, center.lng, aed.lat, aed.lng);
+                    return d < best.d ? { aed, d } : best;
+                }, { aed: null, d: Infinity });
+                if (nearest.d <= 700) {
+                    coveredPop = totalPop;
+                }
+            }
             
             if (totalPop === 0) {
                 elPct.textContent = 'n/a';
@@ -1049,10 +1178,11 @@
             elPct.textContent = pct.toFixed(1) + ' %';
             elPct.style.color = pct >= 30 ? '#27ae60' : (pct >= 10 ? '#f39c12' : '#e74c3c');
             elCtx.textContent =
-                `${Math.round(coveredPop).toLocaleString('nb-NO')} av ` +
-                `${Math.round(totalPop).toLocaleString('nb-NO')} innbyggjarar i VIST utsnitt dekt — ` +
-                `basert på ${coverageAeds.length} ` +
-                `${coverageAedMode === 'open' ? 'registrert opne' : 'aktive/potensielt tilgjengelege'} AED-ar.`;
+                `${usingSentrumArea ? 'Sentrum/Kvadraturen' : 'Lokalt kartutsnitt'} — ` +
+                `${coverageAedMode === 'open'
+                    ? 'basert på registrert opne AED-ar.'
+                    : 'basert på aktive/potensielt tilgjengelege AED-ar.'} ` +
+                `Innbyggjartal er skjult her fordi lokal zoom brukar syntetiske 250m-ruter.`;
         } catch (err) {
             console.warn('[LIVE-COV] feila:', err);
             elCtx.textContent = 'Kunne ikkje rekne ut dekning (sjå konsoll).';
