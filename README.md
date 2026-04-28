@@ -391,7 +391,7 @@ $$;
 
 #### Demo
 
-> *Video/GIF kjem her*
+Demo av PostGIS-klikkmodus inngår i hovuddemoen for prosjektet (sjå lenka under Oppgåve 1). Funksjonen vert demonstrert frå tidsstempelet der vi aktiverer "📍 Aktiver PostGIS-klikk"-knappen og klikkar på kartet — då sender frontenden koordinatane til `/api/postgis/nearby-aeds`, som internt kallar Supabase RPC `nearby_hjertestartere(lat, lng, radius)` med `ST_DWithin`. Resultatet vert teikna som markørar med kvit kant og listast opp i sidepanelet sortert etter avstand.
 
 ---
 
@@ -507,4 +507,53 @@ Alle sju figurar i semesterrapporten er genererte direkte frå pipelinen:
 
 ---
 
-**Sist oppdatert:** April 21, 2026
+## Mappeinnlevering (Oppgåve 4 — Inspera)
+
+For samla mappeinnlevering i Inspera leverer vi to PDF-filer i tråd med presiseringa frå faglærar:
+
+| # | Fil | Innhald | Sider |
+|---|-----|---------|-------|
+| 1 | [`mapperapport.pdf`](mapperapport.pdf) | Samla oversikt over Oppg. 1, 2, 3 — opphavleg leveranse, endringar etter Canvas-retting og lenker til kjeldekode. | 2 |
+| 2 | [`semesterrapport.pdf`](semesterrapport.pdf) | Semesterprosjekt — Dekningsgap-analyse for beredskap i Kristiansand. | 10 + vedlegg |
+
+### Endringar etter Canvas-retting (samandrag)
+
+**Oppgåve 2 (svar på sensor-tilbakemelding):** Markdown-cellene for vektor- og rasteranalyse i [`analyse_beredskap.ipynb`](analyse_beredskap.ipynb) er omarbeidd med eit *HVA → HVORDAN → KVIFOR → TOLKING*-mønster. Kvar celle forklarer no algoritmen (Horn-formel for slope, GEOS overlay-graf, STR-tre for sjoin) og grunngjev parameterval (kvifor 500 m buffer, kvifor UTM 32N, kvifor 30°-terskel, kvifor azimuth 315°). Lagt til kjelder (Brooks et al. 2017, Horn 1981, NRR 2022).
+
+**Oppgåve 3:** Ingen strukturelle endringar — sensor karakteriserte skissa som "særdeles relevant" og "på et høyt nivå". Éin justering: SSB sitt offisielle 250 m-rutenett er erstatta av ein kalibrert syntetisk modell for reproduserbarheit (begrunna i semesterrapport seksjon 2.3).
+
+**Oppgåve 1:** Lagt til klikkbar PostGIS-modus i frontenden, sju nye `/api/coverage/*`-endepunkt og sidepanel for dekningsgap-statistikk (vidareført til semesterprosjektet).
+
+---
+
+**Sist oppdatert:** April 28, 2026
+ |
+| `static/figures/02_befolkning_250m.png`    | Befolkningsrutenett |
+| `static/figures/03_service_areas.png`      | AED-buffersoner |
+| `static/figures/04_coverage_gaps.png`      | Dekningsgap |
+| `static/figures/05_risk_grid.png`          | Risiko-koroplett |
+| `static/figures/06_recommendations.png`    | Anbefalte plasseringar |
+| `static/figures/07_before_after.png`       | Før/etter-samanlikning |
+
+---
+
+## Mappeinnlevering (Oppgåve 4 — Inspera)
+
+For samla mappeinnlevering i Inspera leverer vi to PDF-filer i tråd med presiseringa frå faglærar:
+
+| # | Fil | Innhald | Sider |
+|---|-----|---------|-------|
+| 1 | [`mapperapport.pdf`](mapperapport.pdf) | Samla oversikt over Oppg. 1, 2, 3 — opphavleg leveranse, endringar etter Canvas-retting og lenker til kjeldekode. | 2 |
+| 2 | [`semesterrapport.pdf`](semesterrapport.pdf) | Semesterprosjekt — Dekningsgap-analyse for beredskap i Kristiansand. | 9 innhald + 1 kjelder |
+
+### Endringar etter Canvas-retting (samandrag)
+
+**Oppgåve 2 (svar på sensor-tilbakemelding):** Markdown-cellene for vektor- og rasteranalyse i [`analyse_beredskap.ipynb`](analyse_beredskap.ipynb) er omarbeidd med eit *HVA → HVORDAN → KVIFOR → TOLKING*-mønster. Kvar celle forklarer no algoritmen (Horn-formel for slope, GEOS overlay-graf, STR-tre for sjoin) og grunngjev parameterval (kvifor 500 m buffer, kvifor UTM 32N, kvifor 30°-terskel, kvifor azimuth 315°). Lagt til kjelder (Brooks et al. 2017, Horn 1981, NRR 2022).
+
+**Oppgåve 3:** Ingen strukturelle endringar — sensor karakteriserte skissa som "særdeles relevant" og "på et høyt nivå". Éin justering: SSB sitt offisielle 250 m-rutenett er erstatta av ein kalibrert syntetisk modell for reproduserbarheit (begrunna i semesterrapport seksjon 2.3).
+
+**Oppgåve 1:** Lagt til klikkbar PostGIS-modus i frontenden, sju nye `/api/coverage/*`-endepunkt og sidepanel for dekningsgap-statistikk (vidareført til semesterprosjektet).
+
+---
+
+**Sist oppdatert:** April 28, 2026

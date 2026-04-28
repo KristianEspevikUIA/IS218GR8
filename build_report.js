@@ -14,7 +14,7 @@ const {
   ExternalHyperlink, TabStopType, TabStopPosition, HeadingLevel,
   BorderStyle, WidthType, ShadingType, PageNumber, PageBreak,
   TableOfContents
-} = require('docx');
+} = require('/sessions/optimistic-gallant-faraday/mnt/outputs/node_pkgs/node_modules/docx');
 
 const ROOT = __dirname;
 const FIG  = path.join(ROOT, 'static', 'figures');
@@ -27,7 +27,7 @@ const ACCENT = '2E75B6';
 const DARK   = '1F2937';
 
 const p = (text, opts = {}) => new Paragraph({
-  spacing: { before: 60, after: 120, line: 300 },
+  spacing: { before: 40, after: 80, line: 280 },
   alignment: AlignmentType.JUSTIFIED,
   ...opts,
   children: Array.isArray(text)
@@ -37,19 +37,19 @@ const p = (text, opts = {}) => new Paragraph({
 
 const h1 = (text) => new Paragraph({
   heading: HeadingLevel.HEADING_1,
-  spacing: { before: 360, after: 180 },
-  children: [new TextRun({ text, bold: true, size: 32, color: DARK })],
+  spacing: { before: 240, after: 120 },
+  children: [new TextRun({ text, bold: true, size: 30, color: DARK })],
 });
 
 const h2 = (text) => new Paragraph({
   heading: HeadingLevel.HEADING_2,
-  spacing: { before: 240, after: 120 },
-  children: [new TextRun({ text, bold: true, size: 26, color: DARK })],
+  spacing: { before: 180, after: 80 },
+  children: [new TextRun({ text, bold: true, size: 24, color: DARK })],
 });
 
 const h3 = (text) => new Paragraph({
   heading: HeadingLevel.HEADING_3,
-  spacing: { before: 180, after: 80 },
+  spacing: { before: 120, after: 60 },
   children: [new TextRun({ text, bold: true, size: 22, color: ACCENT })],
 });
 
@@ -68,23 +68,25 @@ const numbered = (text) => new Paragraph({
 const figure = (file, width, heightRatio, captionNum, caption) => {
   const imgPath = path.join(FIG, file);
   const imgData = fs.readFileSync(imgPath);
-  const height = Math.round(width * heightRatio);
+  // Litt mindre figurar for å halde rapporten innanfor 10 sider innhald
+  const W = Math.round(width * 0.78);
+  const height = Math.round(W * heightRatio);
   CHILDREN.push(new Paragraph({
     alignment: AlignmentType.CENTER,
-    spacing: { before: 180, after: 60 },
+    spacing: { before: 80, after: 40 },
     children: [new ImageRun({
       type: 'png',
       data: imgData,
-      transformation: { width, height },
+      transformation: { width: W, height },
       altText: { title: `Figur ${captionNum}`, description: caption, name: file },
     })],
   }));
   CHILDREN.push(new Paragraph({
     alignment: AlignmentType.CENTER,
-    spacing: { after: 240 },
+    spacing: { after: 120 },
     children: [
-      new TextRun({ text: `Figur ${captionNum}: `, bold: true, size: 20, italics: true }),
-      new TextRun({ text: caption, size: 20, italics: true }),
+      new TextRun({ text: `Figur ${captionNum}: `, bold: true, size: 18, italics: true }),
+      new TextRun({ text: caption, size: 18, italics: true }),
     ],
   }));
 };
@@ -505,8 +507,9 @@ CHILDREN.push(p(
   'svakheita som planleggarar bør følgje særleg opp?'
 ));
 
-// 8. KJELDER
-CHILDREN.push(h1('Kjelder'));
+// 8. KJELDER (vedlegg — startar på eiga side)
+CHILDREN.push(new Paragraph({ children: [new PageBreak()] }));
+CHILDREN.push(h1('Kjelder (vedlegg)'));
 CHILDREN.push(p([
   new TextRun({ text: 'GeoNorge (2025). ' }),
   new ExternalHyperlink({
@@ -609,5 +612,32 @@ const doc = new Document({
 
 Packer.toBuffer(doc).then(buf => {
   fs.writeFileSync(OUT, buf);
+  console.log('OK skreiv', OUT, `(${buf.length} bytes)`);
+});
+}),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 18, color: '7F7F7F' }),
+        ],
+      })] }),
+    },
+    children: CHILDREN,
+  }],
+});
+
+Packer.toBuffer(doc).then(buf => {
+  fs.writeFileSync(OUT, buf);
   console.log('✓ Skreiv', OUT, `(${buf.length} bytes)`);
+});
+}),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 18, color: '7F7F7F' }),
+        ],
+      })] }),
+    },
+    children: CHILDREN,
+  }],
+});
+
+Packer.toBuffer(doc).then(buf => {
+  fs.writeFileSync(OUT, buf);
+  console.log('OK skreiv', OUT, buf.length, 'bytes');
+});
 });
