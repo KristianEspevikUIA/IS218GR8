@@ -511,7 +511,7 @@ For samla mappeinnlevering i Inspera leverer vi to PDF-filer i tråd med presise
 | # | Fil | Innhald | Sider |
 |---|-----|---------|-------|
 | 1 | [`mapperapport.pdf`](mapperapport.pdf) | Samla oversikt over Oppgåve 1, 2 og 3, opphavleg leveranse, endringar etter Canvas-retting og lenker til kjeldekode. | 2 |
-| 2 | [`semesterrapport_v2_bm.pdf`](semesterrapport_v2_bm.pdf) | Semesterprosjekt, dekningsgap-analyse for beredskap i Kristiansand. | 9 innhald + 1 kjelder |
+| 2 | [`semesterrapport_v2_bm.pdf`](semesterrapport_v2_bm.pdf) | Semesterprosjekt, dekningsgap-analyse for beredskap i Kristiansand. | 15 innhald + kjelder og vedlegg |
 
 ### Endringar etter Canvas-retting (samandrag)
 
