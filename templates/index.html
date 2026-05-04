@@ -192,7 +192,7 @@
                 <!-- Live-utrekna dekning frå AED-ane som er lasta no -->
                 <div id="live-coverage-box">
                     <div class="row">
-                        <span class="label">Lokal AED-dekning innan 400 m</span>
+                        <span class="label">Befolkningsdekning innan 400 m</span>
                         <b class="pct" id="stat-live-cov">—</b>
                     </div>
                     <div class="ctx" id="stat-live-ctx">Reknast ut når AED-ar er lasta…</div>
@@ -1178,11 +1178,12 @@
             elPct.textContent = pct.toFixed(1) + ' %';
             elPct.style.color = pct >= 30 ? '#27ae60' : (pct >= 10 ? '#f39c12' : '#e74c3c');
             elCtx.textContent =
-                `${usingSentrumArea ? 'Sentrum/Kvadraturen' : 'Lokalt kartutsnitt'} — ` +
+                `${Math.round(coveredPop).toLocaleString('nb-NO')} av ` +
+                `${Math.round(totalPop).toLocaleString('nb-NO')} estimerte innbyggjarar ` +
+                `${usingSentrumArea ? 'i sentrum/Kvadraturen' : 'i lokalt kartutsnitt'} dekt — ` +
                 `${coverageAedMode === 'open'
                     ? 'basert på registrert opne AED-ar.'
-                    : 'basert på aktive/potensielt tilgjengelege AED-ar.'} ` +
-                `Innbyggjartal er skjult her fordi lokal zoom brukar syntetiske 250m-ruter.`;
+                    : 'basert på aktive/potensielt tilgjengelege AED-ar.'}`;
         } catch (err) {
             console.warn('[LIVE-COV] feila:', err);
             elCtx.textContent = 'Kunne ikkje rekne ut dekning (sjå konsoll).';
