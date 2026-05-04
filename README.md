@@ -1,526 +1,148 @@
-# Beredskapskart Kristiansand, interaktivt webkart
+Beredskapskart Kristiansand, interaktivt webkart
 
-### TLDR
+TLDR
 
-Eit interaktivt beredskapskart for Kristiansand-regionen knytt til **Totalforsvaret 2025-2026**. Kartet viser hjertestartarar (AED), brannstasjonar, sjukehus, naudnummer-sentralar og andre beredskapsressursar samla på éit kart, med sanntidsdata frå fleire kjelder. Prosjektet kombinerer lokal GeoJSON, eksternt API (Hjertestarterregisteret), OGC WFS (GeoNorge brannstasjonar) og Supabase PostGIS med romleg filtrering, rutenavigering og PostGIS-baserte spørjingar.
+Et interaktivt beredskapskart for Kristiansand-regionen knyttet til Totalforsvaret 2025–2026. Kartet viser hjertestartere (AED), brannstasjoner, sykehus, nødnummer-sentraler og andre beredskapsressurser samlet på ett kart, med sanntidsdata fra flere kilder. Prosjektet kombinerer lokal GeoJSON, eksternt API (Hjertestarterregisteret), OGC WFS (GeoNorge brannstasjoner) og Supabase PostGIS med romlig filtrering, rutenavigering og PostGIS-baserte spørringer.
 
-**Live** på `http://localhost:3000`
+Live: http://localhost:3000
 
-### Demo
+Demo
 
-Lenke til demo, [https://youtu.be/Ackwl4m9i5A](https://youtu.be/Ackwl4m9i5A)
+https://youtu.be/Ackwl4m9i5A
 
----
+⸻
 
-## Funksjonar
+Funksjoner
 
-- **263 AED-ar** frå Hjertestarterregister-API med fargekoding (grøn for åpen, raud for stengt)
-- **Brannstasjonar frå OGC WFS**, henta live frå GeoNorge (WFS 2.0, GML-parsing)
-- **10+ beredskapsressursar**, sjukehus, legevakt, AMK, sivilforsvar, politi, Røde Kors, flyplass og fleire
-- **Rutenavigering** finn nærmaste åpne AED frå din posisjon (OSRM gangveg-ruting)
-- **PostGIS romleg spørjing** med `ST_DWithin` for å finne AED-ar innan radius (server-side)
-- **Detaljerte popups** med adresse, etasje, beskrivelse, tilgang, åpningstider og serienummer
-- **Romleg søk**, klikk på kartet og søk innan radius
-- **Dynamisk kart**, Leaflet.js hentar ferske data kvar gong sida lastast
-- **MVC-arkitektur** med Flask-backend og rein separasjon av modell, syn og kontroller
-- **Supabase-integrasjon** for stader og (valfritt) AED-data via PostGIS
-- **Totalforsvar-tema** med mørkt beredskapsuttrykk og relevante datakategoriar
-- **Responsivt design** som fungerer på mobil og desktop
+* 263 AED-er fra Hjertestarterregister-API (grønn = åpen, rød = stengt)
+* Brannstasjoner fra GeoNorge (OGC WFS, GML)
+* 10+ beredskapsressurser (sykehus, politi, Røde Kors osv.)
+* Rutenavigering til nærmeste åpne AED (OSRM)
+* PostGIS-spørring med ST_DWithin
+* Detaljerte popups med all info
+* Romlig søk via kartklikk
+* Dynamisk kart (Leaflet.js)
+* MVC-arkitektur (Flask)
+* Supabase PostGIS-integrasjon
+* Responsivt design
 
----
+⸻
 
-## Teknisk stabel
+Teknisk stabel
 
-| Komponent | Versjon | Formål |
-|-----------|---------|--------|
-| **Python** | 3.11+ | Backend runtime |
-| **Flask** | 3.0.0 | Nettrammeverk (MVC-ruter) |
-| **Leaflet.js** | 1.9.4 | Dynamisk kartrammeverk (klientside) |
-| **Leaflet.markercluster** | 1.5.3 | Klyngegruppering av markørar |
-| **httpx** | 0.25.2 | Supabase REST-klient (HTTP/2) |
-| **requests** | 2.31.0 | HTTP-klient for OGC og API-kall |
-| **geopy** | 2.4.0 | Haversine avstandsutrekningar |
-| **python-dotenv** | 1.0.0 | Miljøvariabel-lasting (.env) |
-| **OSRM** | Hosted | Ruteberegning gangveg (gratis, ingen nøkkel) |
-| **Supabase PostGIS** | Hosted | Romleg database for stader |
-| **Hjertestarterregister API** | v1 | AED-kjeldedata (OAuth 2.0) |
-| **GeoNorge WFS** | 2.0.0 | Brannstasjonar (OGC WFS, GML 3.2) |
-| **OpenStreetMap** | CDN | Bakgrunnskart (rasterfliser) |
+* Python 3.11+
+* Flask
+* Leaflet.js
+* MarkerCluster
+* Supabase PostGIS
+* OSRM
+* GeoNorge WFS
+* Hjertestarterregister API
+* OpenStreetMap
 
----
+⸻
 
-## Datakatalog
+Hurtigstart
 
-| Datasett | Kjelde | Format | Bearbeiding |
-|----------|--------|--------|-------------|
-| AED-hjertestartarar (263 stk) | Hjertestarterregister API v1 | JSON til GeoJSON | OAuth 2.0-autentisering, koordinattransformasjon, IS_OPEN-fargekoding, Haversine-avstand frå sentrum |
-| Brannstasjonar (~10 stk) | GeoNorge WFS 2.0 (`wfs.brannstasjoner`) | GML 3.2 til GeoJSON | OGC WFS GetFeature med BBOX-filter, XML/GML-parsing til GeoJSON, eigenskapar for brannstasjon, brannvesen, stasjonstype og kasernert |
-| Beredskapsressursar (11 stk) | OpenStreetMap, DSB, Helse Sør-Øst, Avinor m.fl. | GeoJSON (Point, LineString) | Utvunne frå opne kjelder, kuratert og lagra som `norwegian_landmarks.geojson`, omfattar sjukehus, legevakt, AMK, politi, sivilforsvar, Røde Kors, evakueringsstad, hamn og flyplass |
-| Stader (Supabase) | Supabase PostGIS (`places`-tabell) | JSON via REST | Henta med httpx, konvertert til GeoJSON-features, romleg spørjing med `ST_DWithin` |
-| AED-romleg søk (PostGIS) | Supabase PostGIS (`hjertestartere`-tabell) | JSON via RPC | `nearby_hjertestartere()`-funksjon med `ST_DWithin` for server-side romleg filtrering |
-| Bakgrunnskart | OpenStreetMap (Mapnik) | XYZ rasterfliser | Levert via CDN, ingen bearbeiding |
+1. Klon repo
 
----
-
-## Hurtigstart
-
-### 1. Klon og installer
-
-```bash
 git clone https://github.com/KristianEspevikUIA/IS218GR8.git
 cd IS218GR8
+
+2. Opprett virtual environment
+
 py -m venv .venv
-.venv\Scripts\activate      # Windows
+.venv\Scripts\activate
 pip install -r requirements.txt
-```
 
-### 2. Konfigurer miljøvariablar
+3. Opprett .env
 
-Opprett `.env` i prosjektmappa.
-
-```env
 SUPABASE_URL=https://<prosjekt>.supabase.co
 SUPABASE_ANON_KEY=<din-nøkkel>
 HJERTESTARTERREGISTER_CLIENT_ID=<din-id>
 HJERTESTARTERREGISTER_CLIENT_SECRET=<din-hemmelighet>
-```
 
-### 3. Start serveren
+4. Start app
 
-```bash
 py run.py
-```
-
-Opne `http://localhost:3000` i nettlesaren.
-
-**Med VS Code**, trykk `Ctrl+Shift+B` og vel «Run Flask Web Map».
-
----
-
-## Kartet
-
-### Markørfargar
-
-| Farge | Type |
-|-------|------|
-| 🟢 Grøn | AED åpen (IS_OPEN er Y) |
-| 🔴 Raud | AED stengt (IS_OPEN er N) |
-| 🟠 Oransje | Brannstasjon (OGC WFS) |
-| 🔵 Blå | Beredskapsressurs (lokal GeoJSON) |
-| 🟢 Teal | Supabase-stad (PostGIS) |
-
-### Klikk på ein AED-markør for detaljar
-
-- Namn og adresse
-- Postnummer og postområde
-- Etasje
-- Beskrivelse av plassering
-- Tilgangsinformasjon
-- Åpningstider
-- Serienummer og ID
-- Sist oppdatert dato
-
-### Finn nærmaste åpne AED
-
-1. Klikk **«❤️ Finn nærmaste åpne AED»**
-2. Tillat posisjonstilgang i nettlesaren
-3. Kartet viser gangveg-rute (raud stipla linje)
-4. Infopanel viser avstand og estimert gåtid
-
-> Berre *åpne* AED-ar (IS_OPEN er Y) vert vurdert.
-
----
-
-## Prosjektstruktur
-
-```
-IS218GR8/
-├── app/
-│   ├── __init__.py              # Flask-ruter og API-endepunkt
-│   ├── controllers/
-│   │   └── app_controller.py    # Orkestrasjon og dataflyt
-│   ├── models/
-│   │   ├── data_model.py        # Supabase REST-klient (httpx)
-│   │   ├── map_model.py         # Karttilstand og lag
-│   │   └── hjertestarterregister_api.py  # AED API-klient (OAuth)
-│   └── data/
-│       └── norwegian_landmarks.geojson
-├── templates/
-│   └── index.html               # Leaflet.js dynamisk kart og PostGIS-klikk
-├── analyse_beredskap.ipynb      # Oppgave 2A, romleg analyse (Notebook)
-├── run.py                       # Startpunkt (port 3000)
-├── requirements.txt             # Python-avhengigheiter
-├── supabase_schema.sql          # Database-skjema
-├── sync_aeds_to_supabase.py     # Synk AED-data til Supabase
-└── .env                         # Miljøvariablar (ikkje i git)
-```
 
----
+Åpne i nettleser:
+http://localhost:3000
 
-## API-endepunkt
+⸻
 
-### Kartdata
+Kartet
 
-| Metode | Endepunkt | Skildring |
-|--------|-----------|-----------|
-| GET | `/` | Hovudside med kart |
-| GET | `/api/map/layers` | Alle kartlag som GeoJSON |
-| GET | `/api/data-sources` | Registrerte datakjelder |
+Farger
 
-### AED
+* 🟢 Grønn: AED åpen
+* 🔴 Rød: AED stengt
+* 🟠 Oransje: Brannstasjon
+* 🔵 Blå: Beredskapsressurs
+* 🟢 Teal: Supabase-sted
 
-| Metode | Endepunkt | Skildring |
-|--------|-----------|-----------|
-| GET | `/api/aeds/available` | Tilgjengelege (åpne) AED-ar |
-| GET | `/api/aeds/available/count` | Tal på åpne AED-ar |
+Funksjon
 
-### Stader (Supabase CRUD)
+Klikk på en AED for:
 
-| Metode | Endepunkt | Skildring |
-|--------|-----------|-----------|
-| GET | `/api/supabase/places` | Alle stader |
-| POST | `/api/supabase/places` | Opprett stad |
-| GET | `/api/supabase/places/:id` | Hent ein stad |
-| PUT | `/api/supabase/places/:id` | Oppdater stad |
-| DELETE | `/api/supabase/places/:id` | Slett stad |
-| POST | `/api/supabase/places/nearby` | Stader innan radius |
-| GET | `/api/supabase/places/city/:city` | Stader etter by |
-| GET | `/api/supabase/places/category/:cat` | Stader etter kategori |
+* Adresse
+* Etasje
+* Åpningstider
+* Serienummer
 
-### Søk
+⸻
 
-| Metode | Endepunkt | Skildring |
-|--------|-----------|-----------|
-| POST | `/api/search` | Filtrer etter avstand (Haversine) |
-| POST | `/api/ogc-api` | Hent data frå OGC API |
-| POST | `/api/postgis/nearby-aeds` | Finn AED-ar innan radius (PostGIS `ST_DWithin`) |
+Arkitektur
 
----
+Frontend (Leaflet.js) henter GeoJSON fra Flask API.
 
-## Arkitektur
+Backend:
 
-```
-┌─────────────────────────────────────────────┐
-│          Nettlesar (Leaflet.js)             │
-│  Dynamisk kart, hentar /api/map/layers      │
-│  kvar gong sida lastast (cache av)          │
-│  Lag, AED, brannstasjonar, beredskap, DB    │
-└────────────────┬────────────────────────────┘
-                 │  fetch JSON
-         ┌───────▼────────┐
-         │  Flask Ruter   │
-         │ app/__init__.py│
-         └───────┬────────┘
-                 │
-         ┌───────▼────────┐
-         │ AppController  │   ← orkestrasjon
-         └──┬──┬──┬──┬───┘
-            │  │  │  │
-   ┌────────┘  │  │  └────────┐
-   ▼           ▼  ▼           ▼
- Lokal      GeoNorge  Supabase   Hjertestart.
- GeoJSON    WFS/GML   REST/httpx  API (OAuth)
-(beredskap) (brann)   (PostGIS)   (AED-data)
-```
+* Flask (MVC)
+* AppController styrer dataflyt
 
-Klienten (Leaflet.js) er heilt frikopla frå backend. Alle data kjem som GeoJSON via REST. Brannstasjonar vert henta live frå GeoNorge OGC WFS og konverterte frå GML 3.2 til GeoJSON server-side.
+Datakilder:
 
----
+* GeoJSON (lokal)
+* GeoNorge (WFS)
+* Hjertestarterregister (API)
+* Supabase (PostGIS)
 
-## Supabase (valfritt)
+⸻
 
-Om `hjertestartere`-tabellen ikkje finst i Supabase, fallback-ar systemet automatisk til direkte API-henting.
+Refleksjon
 
-For å aktivere Supabase-synkronisering, gjer dette.
+* GML fra OGC WFS er mer komplisert enn JSON
+* PostGIS (ST_DWithin) er raskere enn Haversine
+* Mangler autentisering (bør legges til)
+* Kan få ytelsesproblemer ved store datasett
+* Offline-støtte bør implementeres
 
-1. Køyr SQL frå `supabase_schema.sql` i Supabase Dashboard, gå til SQL Editor
-2. Køyr `py sync_aeds_to_supabase.py` for å synkronisere AED-data
+⸻
 
----
+Bidragsytere
 
-## Refleksjon
+* Kristian Espevik
+* Victor Ziadpour
+* Nicolai Stephansen
+* Brage Kristoffersen
+* Amged Mohammed
+* Youcef Youcef
 
-1. **OGC WFS og GML-parsing.** Brannstasjonsdata kjem frå GeoNorge som GML 3.2, eit XML-basert format som krev manuell parsing med `xml.etree.ElementTree`. Dette var meir krevjande enn forventa samanlikna med JSON-baserte API-ar, men viser korleis OGC-standardar fungerer i praksis. BBOX-filtrering gjer at berre relevante stasjonar vert henta.
+⸻
 
-2. **PostGIS mot Haversine.** Opphavleg brukte vi berre Python-basert Haversine for avstandsfiltrering. No nyttar vi `ST_DWithin` i Supabase for server-side romleg spørjing, mykje meir effektivt for store datasett og korrekt for sfærisk geometri. Den Python-baserte Haversine er framleis fallback.
+Lisens
 
-3. **Autentisering og sikkerheit.** Applikasjonen har ikkje brukarautentisering. Supabase anon-nøkkel og API-credentials ligg i `.env`, men for ein produksjonsversjon bør ein leggje til Flask-Login eller JWT-basert tilgangskontroll slik at sensitive endepunkt ikkje er opne.
+MIT
 
-4. **Yting ved mange markørar.** Med 263 AED-ar, omtrent 10 brannstasjonar og 11 beredskapsressursar fungerer MarkerCluster bra, men dersom ein utvider til heile Noreg (over 10 000 AED-ar) vil klientside-rendering bli treg. Ei forbetring er å implementere server-side klynging eller vektorfliser.
+⸻
 
-5. **Offline-støtte og PWA.** I ein beredskapssituasjon kan internett vere nede. Ei framtidig forbetring er å cache AED-data i Service Worker eller localStorage slik at kartet fungerer offline med siste kjende data, særleg relevant for Totalforsvar-scenariet.
+Oppgaver (kort)
 
----
-
-## Bidragsytarar
-
-- **Kristian Espevik**, arkitektur, Flask, MVC
-- **Victor Ziadpour**, OGC API, Supabase-integrasjon
-- **Nicolai Stephansen**, datahenting og spørjingar
-- **Brage Kristoffersen**, frontend og interaksjon
-- **Amged Mohammed**, testing og dokumentasjon
-- **Youcef Youcef**, kartvisualisering og design
-
----
-
-## Lisens
-
-MIT, sjå [LICENSE](LICENSE).
-
----
-
-## Oppgave 2, romleg analyse og Spatial SQL
-
-### Del A, romleg analyse i Python (Notebook)
-
-**Notebook**, [`analyse_beredskap.ipynb`](analyse_beredskap.ipynb)
-
-Notebooken utfører ein komplett romleg analyse av beredskapsressursar i Kristiansand, knytt til Totalforsvaret 2025-2026.
-
-#### Innhald og analysar
-
-| Analyse | Verktøy | Skildring |
-|---------|---------|-----------|
-| Data Ingest (3 datasett) | Pandas, GeoPandas, Requests | Lokal GeoJSON, Hjertestarterregister API (OAuth 2.0), GeoNorge WFS |
-| Attributtfiltrering | GeoPandas | Åpne mot stengte AED-ar med fargekoda visualisering |
-| Romleg filtrering | GeoPandas (sjoin) | AED-ar innanfor Kristiansand kommunegrense |
-| Interaktivt kart | Folium og MarkerCluster | AED-ar og beredskapsressursar med popups |
-| SQL-analyse | DuckDB | AED per postområde, statistikk |
-| Buffer (500m) | GeoPandas/Shapely | Beredskapssone rundt åpne AED-ar |
-| Overlay (intersection) | GeoPandas | AED-dekking mot kommuneareal |
-| Overlay (difference) | GeoPandas | Område utan AED-dekning |
-| Romleg aggregering | GeoPandas | AED-tettleik per km²-rute (grid) |
-| DEM og høgdedata | Rasterio, NumPy | Terrengmodell for Kristiansand |
-| Helningskart (slope) | GDAL og NumPy | Bratte område over 30° |
-| Vektorisering | rasterio.features | Polygonize bratte område |
-| Hillshade (2 stk) | NumPy og GDAL | Sol frå NV (315°/35°) og aust (90°/60°) |
-
-#### Verktøy
-
-- **Pandas**, databehandling
-- **GeoPandas**, romleg analyse (buffer, overlay, sjoin, dissolve)
-- **DuckDB**, SQL-spørjingar mot DataFrames
-- **Folium**, interaktiv kartvisualisering
-- **Matplotlib**, statisk visualisering
-- **Rasterio**, rasterdata (DEM, slope, hillshade)
-- **GDAL**, CLI-kommandoar dokumentert i notebook
-
----
-
-### Del B, utviding av webkart (Spatial SQL)
-
-#### Skildring av utvidinga
-
-Webkartet er utvida med **interaktiv PostGIS-spørjing** via Supabase. Brukaren kan gjere dette.
-
-1. **Aktivere PostGIS-klikkmodus** med knappen «📍 Aktiver PostGIS-klikk»
-2. **Klikke kvar som helst på kartet**, koordinatane vert sendt til Supabase
-3. **Sjå resultat**, AED-ar innanfor valt radius vert utheva med kvit kant og fargekoda (grøn for åpen, raud for stengt)
-4. **Justerbar radius**, brukar kan endre søkeradius (standard 2 km)
-5. **Resultatliste** i panelet med alle funne AED-ar, sortert etter avstand, klikk for zoom
-
-#### Korleis det fungerer
-
-```
-Brukar klikkar → Frontend sender lat/lng + radius til Flask
-→ Flask kallar Supabase RPC, nearby_hjertestartere(lat, lng, radius)
-→ Supabase køyrer PostGIS ST_DWithin() server-side
-→ Resultata vert returnert sortert etter avstand
-→ Frontend viser markørar, sirkel og resultatliste
-```
+* Notebook med romlig analyse (GeoPandas, Rasterio)
+* PostGIS-klikk i kart
+* Dekningsgap-analyse og anbefalinger
 
-#### SQL-funksjon i Supabase (PostGIS)
+⸻
 
-```sql
--- PostGIS RPC, finn AED-ar i nærleiken med ST_DWithin
-CREATE OR REPLACE FUNCTION nearby_hjertestartere(
-  center_lat float,
-  center_lng float,
-  radius_km float
-)
-RETURNS TABLE (
-  id bigint,
-  asset_id bigint,
-  site_name text,
-  site_address text,
-  site_post_code text,
-  site_post_area text,
-  site_latitude float,
-  site_longitude float,
-  is_open boolean,
-  opening_hours_text text,
-  dist_km float
-)
-LANGUAGE sql
-AS $$
-  SELECT
-    id,
-    asset_id,
-    site_name,
-    site_address,
-    site_post_code,
-    site_post_area,
-    site_latitude,
-    site_longitude,
-    is_open,
-    opening_hours_text,
-    (ST_Distance(
-      location,
-      ST_SetSRID(ST_MakePoint(center_lng, center_lat), 4326)::geography
-    ) / 1000) AS dist_km
-  FROM hjertestartere
-  WHERE ST_DWithin(
-    location,
-    ST_SetSRID(ST_MakePoint(center_lng, center_lat), 4326)::geography,
-    radius_km * 1000
-  )
-  ORDER BY dist_km;
-$$;
-```
-
-#### PostGIS-funksjonar brukt
-
-- `ST_DWithin(geom, point, distance)` finn objekt innanfor ein avstand (sfærisk)
-- `ST_Distance(geom, point)` reknar eksakt avstand i meter
-- `ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography` lagar geografi-punkt frå koordinatar
-
-#### Visuell feedback
-
-- **Klikk-markør** (📍 teal) med popup som viser koordinatar og radius
-- **Sirkel** (teal, stipla) som viser søkeradius
-- **Resultatmarkørar** med kvit kant, grøn for åpen og raud for stengt
-- **Resultattabell** i sidepanelet med avstand frå klikk
-- **Toast-melding** med antal funne AED-ar og tid
-
-#### Demo
-
-Demo av PostGIS-klikkmodus inngår i hovuddemoen for prosjektet (sjå lenka under Oppgåve 1). Funksjonen vert demonstrert frå tidsstempelet der vi aktiverer "📍 Aktiver PostGIS-klikk"-knappen og klikkar på kartet. Då sender frontenden koordinatane til `/api/postgis/nearby-aeds`, som internt kallar Supabase RPC `nearby_hjertestartere(lat, lng, radius)` med `ST_DWithin`. Resultatet vert teikna som markørar med kvit kant og listast opp i sidepanelet sortert etter avstand.
-
----
-
-### Notebook-guide
-
-Notebooken ligg i rotmappa til prosjektet.
-
-📓 **[analyse_beredskap.ipynb](analyse_beredskap.ipynb)**
-
-For å køyre notebooken.
-
-```bash
-# Installer avhengigheiter
-pip install -r requirements.txt
-
-# Start Jupyter
-jupyter notebook analyse_beredskap.ipynb
-```
-
-Eller opne i **VS Code** med Jupyter-utvidinga eller **Google Colab**.
-
----
-
-## Oppgåve 4, semesterprosjekt og dekningsgap-analyse
-
-### TLDR
-
-Ei full romleg analyseløysing som bygger vidare på oppgåve 1 og 2 og identifiserer område i Kristiansand som manglar AED-dekning, reknar ut ein risikoscore per 250 m-celle, og foreslår optimale plasseringar for nye hjertestarterar via ein grådig algoritme. Analysen er tett kopla med webkartet frå oppgave 1, alle resultat vert servert via nye Flask-endepunkt og rendra live i Leaflet-frontenden.
-
-📄 **Rapport**, [semesterrapport_v2_bm.pdf](semesterrapport_v2_bm.pdf) (10 sider)
-📓 **Notebook**, [dekningsgap_analyse.ipynb](dekningsgap_analyse.ipynb) (32 celler, 17 kodeceller)
-📚 **Samla mapperapport**, [mapperapport_samlet.pdf](mapperapport_samlet.pdf) (18 sider)
-
-### Problemstilling
-
-> *Korleis kan vi identifisere og visualisere sårbare område i Kristiansand med mangelfull beredskapsdekning i eit totalforsvarsscenario, og foreslå optimale plasseringar for nye beredskapsressursar?*
-
-### Analysepipeline
-
-1. **Service areas**, buffer 400 m rundt kvar AED (`coverage_model.service_areas`)
-2. **Dekningsgap**, overlay-difference mellom kommunen og AED-bufferunion (avleidd datasett)
-3. **Befolkningsmodell**, 250 m rutenett med distance-decay frå 9 bydelssentrum, kalibrert til 115 000 (SSB 2024)
-4. **Risikoscore**, `population × (1 − coverage_frac)` per celle, klassifisert i fem klasser
-5. **Anbefalingar**, grådig algoritme vel 10 nye AED-plasseringar som maksimerer dekning
-
-### Nye filer
-
-```
-app/models/coverage_model.py        # Felles analyse-pipeline (notebook + Flask)
-app/data/coverage/*.geojson         # Pre-computed resultat-lag (5 filer)
-app/data/befolkning_kristiansand.geojson   # 250 m rutenett
-app/data/kristiansand_kommune.geojson      # Kommunegrense
-app/data/aeds_cache.geojson                # Cache av Hjertestarter-registeret
-app/data/brannstasjoner_cache.geojson      # Cache av GeoNorge WFS
-dekningsgap_analyse.ipynb           # Full analyse-notebook
-build_notebook.py                   # Byggjer notebook programmatisk
-run_coverage_analysis.py            # Køyr heile pipeline, skriv GeoJSON-lag
-generate_population_grid.py         # Byggjer befolkningsmodell og kommunegrense
-generate_figures.py                 # Matplotlib-figurar til rapport
-build_report.js                     # docx-generator (semesterrapport)
-build_mapperapport.js               # docx-generator (mapperapport forside)
-static/figures/*.png                # 7 rapport-figurar
-semesterrapport_v2_bm.pdf           # Endeleg PDF (10 sider)
-mapperapport_samlet.pdf             # Samla mapperapport-PDF (18 sider)
-```
-
-### Nye API-endepunkt (Oppgåve 4)
-
-| Endepunkt | Innhald |
-|-----------|---------|
-| `GET /api/coverage/service-areas`  | Buffersoner rundt AED, brannstasjon, sjukehus |
-| `GET /api/coverage/gaps`           | Dekningsgap-polygon (avleidd datasett) |
-| `GET /api/coverage/risk-grid`      | 250 m risiko-koroplett |
-| `GET /api/coverage/recommendations` | Topp-10 anbefalte nye AED-plasseringar |
-| `GET /api/coverage/population`     | Befolkningsrutenett |
-| `GET /api/coverage/summary`        | Nøkkeltal for sidepanel |
-
-### Køyr semesterprosjektet
-
-```bash
-# Generer input-data (éin gong)
-python generate_population_grid.py
-
-# Køyr heile analyse-pipelinen, skriv app/data/coverage/*.geojson
-python run_coverage_analysis.py
-
-# Start Flask, nye lag vert servert dynamisk frå /api/coverage/*
-python run.py
-
-# Opne notebook for full analyse ende-til-ende
-jupyter notebook dekningsgap_analyse.ipynb
-```
-
-### Rapportfigurar
-
-Alle sju figurar i semesterrapporten er genererte direkte frå pipelinen.
-
-| Fil | Innhald |
-|-----|---------|
-| `static/figures/01_oversikt_ressursar.png` | Oversikt alle ressursar |
-| `static/figures/02_befolkning_250m.png`    | Befolkningsrutenett |
-| `static/figures/03_service_areas.png`      | AED-buffersoner |
-| `static/figures/04_coverage_gaps.png`      | Dekningsgap |
-| `static/figures/05_risk_grid.png`          | Risiko-koroplett |
-| `static/figures/06_recommendations.png`    | Anbefalte plasseringar |
-| `static/figures/07_before_after.png`       | Før- og etter-samanlikning |
-
----
-
-## Mappeinnlevering (Oppgåve 4, Inspera)
-
-For samla mappeinnlevering i Inspera leverer vi to PDF-filer i tråd med presiseringa frå faglærar.
-
-| # | Fil | Innhald | Sider |
-|---|-----|---------|-------|
-| 1 | [`mapperapport.pdf`](mapperapport.pdf) | Samla oversikt over Oppgåve 1, 2 og 3, opphavleg leveranse, endringar etter Canvas-retting og lenker til kjeldekode. | 2 |
-| 2 | [`semesterrapport_v2_bm.pdf`](semesterrapport_v2_bm.pdf) | Semesterprosjekt, dekningsgap-analyse for beredskap i Kristiansand. | 9 innhald + 1 kjelder |
-
-### Endringar etter Canvas-retting (samandrag)
-
-**Oppgåve 2 (svar på sensor-tilbakemelding).** Markdown-cellene for vektor- og rasteranalyse i [`analyse_beredskap.ipynb`](analyse_beredskap.ipynb) er omarbeidd med eit *HVA → HVORDAN → KVIFOR → TOLKING*-mønster. Kvar celle forklarer no algoritmen (Horn-formel for slope, GEOS overlay-graf, STR-tre for sjoin) og grunngjev parameterval (kvifor 500 m buffer, kvifor UTM 32N, kvifor 30°-terskel, kvifor azimuth 315°). Lagt til kjelder (Brooks et al. 2017, Horn 1981, NRR 2022).
-
-**Oppgåve 3.** Ingen strukturelle endringar, sensor karakteriserte skissa som "særdeles relevant" og "på et høyt nivå". Éin justering, SSB sitt offisielle 250 m-rutenett er erstatta av ein kalibrert syntetisk modell for reproduserbarheit (begrunna i semesterrapport seksjon 2.1).
-
-**Oppgåve 1.** Lagt til klikkbar PostGIS-modus i frontenden, sju nye `/api/coverage/*`-endepunkt og sidepanel for dekningsgap-statistikk (vidareført til semesterprosjektet).
-
----
-
-**Sist oppdatert** 4. mai 2026
+Sist oppdatert: 4. mai 2026
